@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Betrora Coach Console
 
-## Getting Started
+Cinematic, professional web app for Betrora coaches, built with Next.js App Router, TypeScript, Tailwind, Supabase, and SWR.
 
-First, run the development server:
+## Getting started
+
+1. **Install dependencies**
+
+```bash
+npm install
+```
+
+2. **Configure environment**
+
+Create a `.env.local` file in the project root:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://sjznxydffrcdhmkearob.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqem54eWRmZnJjZGhta2Vhcm9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA2OTc0NDAsImV4cCI6MjA2NjI3MzQ0MH0.cPkReT3qIm-KrZrjtp0CRBphcAoLsAPHVv3XlCLvJNY
+
+# Base URL of the existing Calmoraa/Betrora app that exposes /api/coach-messages, /api/coaches, /api/ask-ai, /api/wheel-feedback
+NEXT_PUBLIC_CALMORAA_API_BASE_URL=http://localhost:3000
+```
+
+3. **Run dev server**
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open `http://localhost:3000` in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Key routes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `/login` – Supabase auth (email/password and Google) with cinematic hero.
+- `/dashboard` – KPIs for active clients, pending messages, goals, and stuck tasks.
+- `/inbox` – Coach message inbox powered by `/api/coach-messages`.
+- `/clients/[userId]` – Client profile with goals, microtasks timeline, and mood heatmap.
+- `/profile` – Coach profile editor backed by the `coaches` table.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+All database reads/writes use the existing Supabase project and respect RLS via the anon key.
