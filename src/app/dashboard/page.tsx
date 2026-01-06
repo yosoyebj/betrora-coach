@@ -1,10 +1,13 @@
 "use client";
 
+import { useState } from "react";
+
 import { useRouter } from "next/navigation";
 import { CinematicShell } from "../../components/CinematicShell";
 import { useSupabaseAuth } from "../../hooks/useSupabaseAuth";
 import { useCoachRole } from "../../hooks/useSupabaseAuth";
 import { StatCard } from "../../components/StatCard";
+import { ActiveClientsModal } from "../../components/ActiveClientsModal";
 import useSWR from "swr";
 import { createSupabaseBrowserClient } from "../../lib/supabaseClient";
 
@@ -25,7 +28,7 @@ async function fetchDashboardKpis() {
 
   const coachId = coach.id;
 
-  const [messagesRes, goalsRes, microtasksRes, moodRes] = await Promise.all([
+  const [messagesRes, goalsRes, microtasksRes, moodRes, subscriptionsRes] = await Promise.all([
     supabase
       .from("coach_messages")
       .select("user_id,status")
@@ -44,11 +47,28 @@ async function fetchDashboardKpis() {
       .eq("coach_id", coachId)
       .order("date", { ascending: false })
       .limit(14),
+    supabase
+      .from("coach_subscriptions")
+      .select("user_id")
+      .eq("coach_id", coachId)
+      .eq("status", "active"),
   ]);
 
-  const activeClients = new Set(
-    (messagesRes.data ?? []).map((m: any) => m.user_id),
-  ).size;
+  const uniqueClientIds = Array.from(new Set(
+    (subscriptionsRes.data ?? []).map((s: any) => s.user_id)
+  )) as string[];
+
+  const activeClients = uniqueClientIds.length;
+
+  let activeClientsList: any[] = [];
+  if (uniqueClientIds.length > 0) {
+    const { data: users } = await supabase
+      .from("users")
+      .select("id, full_name, email")
+      .in("id", uniqueClientIds);
+    activeClientsList = users ?? [];
+  }
+
   const pendingMessages = (messagesRes.data ?? []).filter(
     (m: any) => m.status === "pending",
   ).length;
@@ -62,6 +82,7 @@ async function fetchDashboardKpis() {
 
   return {
     activeClients,
+    activeClientsList,
     pendingMessages,
     goalsInProgress,
     goalsCompleted,
@@ -72,6 +93,7 @@ async function fetchDashboardKpis() {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const [showClientsModal, setShowClientsModal] = useState(false);
   const { user, loading } = useSupabaseAuth();
   const { coach, isCoach, loading: coachLoading } = useCoachRole();
   const { data } = useSWR("dashboard-kpis", fetchDashboardKpis);
@@ -130,6 +152,7 @@ export default function DashboardPage() {
               value={data?.activeClients ?? "--"}
               trendLabel="Unique clients who messaged you"
               accent="cyan"
+              onClick={() => setShowClientsModal(true)}
             />
             <StatCard
               label="Pending messages"
@@ -150,6 +173,12 @@ export default function DashboardPage() {
               accent="rose"
             />
           </section>
+
+          <ActiveClientsModal
+            isOpen={showClientsModal}
+            onClose={() => setShowClientsModal(false)}
+            clients={data?.activeClientsList ?? []}
+          />
         </div>
       )}
     </CinematicShell>

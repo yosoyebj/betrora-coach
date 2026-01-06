@@ -1,8 +1,9 @@
 export type Coach = {
   id: string;
-  user_id: string;
-  email: string | null;
-  full_name: string | null;
+  user_id: string | null; // Optional - coaches are independent from users
+  email: string | null; // Coach email - independent from users table
+  full_name: string | null; // Coach name - independent from users table
+  password: string | null; // Coach password - stored in coaches table
   avatar_url: string | null;
   timezone: string | null;
   specialties: string[] | null;

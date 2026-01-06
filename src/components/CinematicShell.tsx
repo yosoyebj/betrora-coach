@@ -20,14 +20,17 @@ export function CinematicShell({ children }: { children: React.ReactNode }) {
   const handleLogout = async () => {
     const { createSupabaseBrowserClient } = await import("../lib/supabaseClient");
     const supabase = createSupabaseBrowserClient();
+    // Sign out from Supabase Auth
     await supabase.auth.signOut();
+    // Remove coach session from localStorage
+    localStorage.removeItem("coach_session");
     router.push("/login");
   };
 
   return (
-    <div className="relative min-h-screen text-slate-50">
-      <div className="cinematic-grid" />
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_10%_-10%,_rgba(245,158,11,0.22),_transparent_60%)]" />
+    <div className="relative min-h-screen text-slate-50" suppressHydrationWarning>
+      <div className="cinematic-grid" suppressHydrationWarning />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_10%_-10%,_rgba(245,158,11,0.22),_transparent_60%)]" suppressHydrationWarning />
 
       <header className="sticky top-0 z-20 border-b border-slate-800/70 bg-slate-950/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
@@ -72,10 +75,10 @@ export function CinematicShell({ children }: { children: React.ReactNode }) {
               <>
                 <div className="hidden text-right text-xs sm:block">
                   <p className="text-slate-200/90">
-                    {user.user_metadata.full_name ?? user.email}
+                    {user.user_metadata?.full_name ?? user.email}
                   </p>
                   <p className="text-[10px] uppercase tracking-[0.2em] text-amber-300/80">
-                    Signed in
+                    Coach
                   </p>
                 </div>
                 <button

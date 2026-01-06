@@ -24,7 +24,7 @@ export default function LoginPage() {
     setError(null);
     const supabase = createSupabaseBrowserClient();
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: authData, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -34,6 +34,37 @@ export default function LoginPage() {
       setError(error.message);
       return;
     }
+
+    // Ensure this account is registered as a coach
+    const user = authData.user;
+    if (!user) {
+      setError("Authentication failed. Please try again.");
+      return;
+    }
+
+    const { data: coach, error: coachError } = await supabase
+      .from("coaches")
+      .select("id, status")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (coachError || !coach) {
+      // Not a coach – sign out and show message
+      await supabase.auth.signOut();
+      setError(
+        "This account is not registered as a coach. Please contact admin to grant coach access."
+      );
+      return;
+    }
+
+    if (coach.status && coach.status !== "active") {
+      await supabase.auth.signOut();
+      setError(
+        "Your coach account is currently inactive. Please contact support."
+      );
+      return;
+    }
+
     router.replace("/dashboard");
   };
 

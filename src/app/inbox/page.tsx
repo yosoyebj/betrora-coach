@@ -11,25 +11,42 @@ import { MessageList } from "../../components/MessageList";
 import { MessageDetail } from "../../components/MessageDetail";
 
 async function fetchInbox(statusFilter: string | null) {
-  const base = process.env.NEXT_PUBLIC_CALMORAA_API_BASE_URL;
   const supabase = createSupabaseBrowserClient();
+  
+  // Get Supabase Auth user
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) return [];
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
 
-  const url = new URL("/api/coach-messages", base);
-  if (statusFilter) url.searchParams.set("status", statusFilter);
+  // Get coach record by user_id
+  const { data: coach } = await supabase
+    .from("coaches")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!coach) return [];
 
-  const res = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error("Failed to load inbox");
-  const data = await res.json();
-  return data as CoachMessage[];
+  const coachId = coach.id;
+
+  // Fetch messages directly from Supabase
+  let query = supabase
+    .from("coach_messages")
+    .select("*")
+    .eq("coach_id", coachId);
+
+  if (statusFilter) {
+    query = query.eq("status", statusFilter);
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching inbox:", error);
+    return [];
+  }
+
+  return (data || []) as CoachMessage[];
 }
 
 export default function InboxPage() {
@@ -51,21 +68,17 @@ export default function InboxPage() {
 
   const updateStatus = async (status: CoachMessage["status"]) => {
     if (!selectedMessage) return;
-    const base = process.env.NEXT_PUBLIC_CALMORAA_API_BASE_URL;
     const supabase = createSupabaseBrowserClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) return;
 
-    await fetch(`${base}/api/coach-messages`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ id: selectedMessage.id, status }),
-    });
+    const { error } = await supabase
+      .from("coach_messages")
+      .update({ status })
+      .eq("id", selectedMessage.id);
+
+    if (error) {
+      console.error("Error updating message status:", error);
+      return;
+    }
 
     mutate();
   };

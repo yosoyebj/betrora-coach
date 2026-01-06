@@ -27,6 +27,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[radial-gradient(circle_at_top,_#0b0b10,_#02010a_55%)] text-slate-50`}
+        suppressHydrationWarning
       >
         {children}
       </body>
