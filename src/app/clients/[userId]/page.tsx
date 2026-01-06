@@ -7,6 +7,7 @@ import { useSupabaseAuth } from "../../../hooks/useSupabaseAuth";
 import { createSupabaseBrowserClient } from "../../../lib/supabaseClient";
 import { Timeline } from "../../../components/Timeline";
 import { MoodHeatmap } from "../../../components/MoodHeatmap";
+import { GuidanceTasksSection } from "../../../components/GuidanceTasksSection";
 
 async function fetchClientProfile(userId: string) {
   const supabase = createSupabaseBrowserClient();
@@ -39,12 +40,29 @@ async function fetchClientProfile(userId: string) {
   };
 }
 
+async function fetchCoachId() {
+  const supabase = createSupabaseBrowserClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: coach } = await supabase
+    .from("coaches")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  return coach?.id ?? null;
+}
+
 export default function ClientProfilePage() {
   const params = useParams<{ userId: string }>();
   const userId = params.userId;
   const router = useRouter();
   const { user, loading } = useSupabaseAuth();
   const { data } = useSWR(["client-profile", userId], () => fetchClientProfile(userId));
+  const { data: coachId } = useSWR("coach-id", fetchCoachId);
 
   if (!loading && !user) {
     router.replace("/login");
@@ -134,6 +152,12 @@ export default function ClientProfilePage() {
               <MoodHeatmap entries={data.moodEntries ?? []} />
             </div>
           </section>
+
+          {coachId && (
+            <section>
+              <GuidanceTasksSection userId={userId} coachId={coachId} />
+            </section>
+          )}
         </div>
       )}
     </CinematicShell>
