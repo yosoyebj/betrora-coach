@@ -431,17 +431,25 @@ export function GuidanceTasksSection({
   return (
     <div className="space-y-5">
       <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-amber-300/90">
-            Guidance Tasks
-          </p>
-          <h2 className="text-xl font-semibold text-slate-50">
-            Client Guidance Management
-          </h2>
-          <p className="text-sm text-slate-300/90">
-            Create and manage guidance tasks for this client. Track progress,
-            provide feedback, and help them stay on track.
-          </p>
+        <div className="flex items-start gap-2">
+          <div className="mt-1 flex-shrink-0 w-5 h-5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-indigo-300/90">
+              <path d="M9 11l3 3L22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs uppercase tracking-[0.28em] text-indigo-300/90 font-semibold">
+              Guidance Tasks
+            </p>
+            <h2 className="text-xl font-semibold text-slate-50 mt-1">
+              Client Guidance Management
+            </h2>
+            <p className="text-sm text-slate-300/90 mt-1">
+              Create and manage guidance tasks for this client. Track progress,
+              provide feedback, and help them stay on track.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -451,7 +459,7 @@ export function GuidanceTasksSection({
         onTaskCreated={handleTaskCreated}
       />
 
-      <div className="rounded-3xl border border-slate-800/80 bg-slate-950/80 p-5 shadow-xl shadow-black/50">
+      <div className="rounded-3xl border-l-4 border-indigo-500/80 border border-slate-800/80 bg-gradient-to-br from-indigo-950/40 via-slate-950/80 to-slate-950/80 p-5 shadow-xl shadow-indigo-500/10">
         <div className="flex items-center gap-2 mb-5">
           <button
             onClick={() => setActiveTab("active")}

@@ -9,6 +9,7 @@ import { createSupabaseBrowserClient } from "../../lib/supabaseClient";
 import type { CoachMessage } from "../../lib/types";
 import { MessageList } from "../../components/MessageList";
 import { MessageDetail } from "../../components/MessageDetail";
+import { CoachNotesPanel } from "../../components/CoachNotesPanel";
 import { usePendingMessages } from "../../hooks/usePendingMessages";
 
 async function fetchInbox(statusFilter: string | null) {
@@ -424,12 +425,13 @@ export default function InboxPage() {
               onSelect={setSelectedId}
             />
           </section>
-            <section>
+            <section className="space-y-4">
               <MessageDetail
                 message={selectedMessage}
                 onStatusChange={updateStatus}
                 onReplySent={handleReplySent}
               />
+              <CoachNotesPanel userId={selectedMessage?.user_id} />
             </section>
           </div>
           </div>

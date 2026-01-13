@@ -30,12 +30,19 @@ export function MessageDetail({ message, userProfile, onStatusChange, onReplySen
   }
 
   return (
-    <div className="flex h-full flex-col gap-3 rounded-2xl border border-slate-800/80 bg-slate-950/80 p-4 text-sm text-slate-100 shadow-xl shadow-black/50">
-      <div className="space-y-1">
-        <p className="text-xs uppercase tracking-[0.26em] text-amber-300/80">
-          Client message
-        </p>
-        <p className="text-sm leading-relaxed text-slate-100">{message.message}</p>
+    <div className="flex h-full flex-col gap-3 rounded-2xl border-l-4 border-blue-500/80 border border-slate-800/80 bg-gradient-to-br from-blue-950/40 via-slate-950/80 to-slate-950/80 p-4 text-sm text-slate-100 shadow-xl shadow-blue-500/10">
+      <div className="flex items-start gap-2 space-y-1">
+        <div className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-blue-300/90">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs uppercase tracking-[0.26em] text-blue-300/90 font-semibold">
+            Client message
+          </p>
+          <p className="text-sm leading-relaxed text-slate-100 mt-2">{message.message}</p>
+        </div>
       </div>
 
       {userProfile && (

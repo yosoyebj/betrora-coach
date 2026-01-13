@@ -55,3 +55,11 @@ export type CoachTask = {
   completed_at: string | null;
   priority: number | null;
 };
+export type CoachNote = {
+  id: string;
+  user_id: string;
+  coach_id: string;
+  note: string;
+  created_at: string;
+  updated_at: string;
+};
