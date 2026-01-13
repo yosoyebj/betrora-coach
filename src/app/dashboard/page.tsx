@@ -8,6 +8,7 @@ import { useSupabaseAuth } from "../../hooks/useSupabaseAuth";
 import { useCoachRole } from "../../hooks/useSupabaseAuth";
 import { StatCard } from "../../components/StatCard";
 import { ActiveClientsModal } from "../../components/ActiveClientsModal";
+import { PendingFeedbackNotification } from "../../components/PendingFeedbackNotification";
 import useSWR from "swr";
 import { createSupabaseBrowserClient } from "../../lib/supabaseClient";
 
@@ -28,31 +29,12 @@ async function fetchDashboardKpis() {
 
   const coachId = coach.id;
 
-  const [messagesRes, goalsRes, microtasksRes, moodRes, subscriptionsRes] = await Promise.all([
-    supabase
-      .from("coach_messages")
-      .select("user_id,status")
-      .eq("coach_id", coachId),
-    supabase
-      .from("goals")
-      .select("status,stuck_task")
-      .eq("coach_id", coachId),
-    supabase
-      .from("microtasks")
-      .select("status,skip_count")
-      .eq("coach_id", coachId),
-    supabase
-      .from("mood_entries")
-      .select("mood")
-      .eq("coach_id", coachId)
-      .order("date", { ascending: false })
-      .limit(14),
-    supabase
-      .from("coach_subscriptions")
-      .select("user_id")
-      .eq("coach_id", coachId)
-      .eq("status", "active"),
-  ]);
+  // First, get active subscriptions to get client user IDs
+  const subscriptionsRes = await supabase
+    .from("coach_subscriptions")
+    .select("user_id")
+    .eq("coach_id", coachId)
+    .eq("status", "active");
 
   const uniqueClientIds = Array.from(new Set(
     (subscriptionsRes.data ?? []).map((s: any) => s.user_id)
@@ -68,6 +50,37 @@ async function fetchDashboardKpis() {
       .in("id", uniqueClientIds);
     activeClientsList = users ?? [];
   }
+
+  // Now fetch data for these clients
+  const [messagesRes, goalsRes, microtasksRes, moodRes] = await Promise.all([
+    supabase
+      .from("coach_messages")
+      .select("user_id,status")
+      .eq("coach_id", coachId),
+    // Goals don't have coach_id, filter by user_id from active subscriptions
+    uniqueClientIds.length > 0
+      ? supabase
+          .from("goals")
+          .select("status,stuck_task")
+          .in("user_id", uniqueClientIds)
+      : { data: [], error: null },
+    // Microtasks don't have coach_id, filter by user_id from active subscriptions
+    uniqueClientIds.length > 0
+      ? supabase
+          .from("microtasks")
+          .select("status,skip_count")
+          .in("user_id", uniqueClientIds)
+      : { data: [], error: null },
+    // Mood entries don't have coach_id, filter by user_id from active subscriptions
+    uniqueClientIds.length > 0
+      ? supabase
+          .from("mood_entries")
+          .select("mood")
+          .in("user_id", uniqueClientIds)
+          .order("date", { ascending: false })
+          .limit(14)
+      : { data: [], error: null },
+  ]);
 
   const pendingMessages = (messagesRes.data ?? []).filter(
     (m: any) => m.status === "pending",
@@ -120,6 +133,8 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="space-y-6">
+          <PendingFeedbackNotification coachId={coach?.id ?? null} />
+          
           <section className="flex flex-col gap-4 rounded-3xl border border-slate-800/80 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-5 shadow-2xl shadow-amber-500/20 sm:flex-row sm:items-center sm:justify-between">
             <div className="max-w-xl space-y-2">
               <p className="text-xs uppercase tracking-[0.28em] text-amber-300/90">

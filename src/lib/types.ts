@@ -40,3 +40,18 @@ export type User = {
   created_at: string | null;
 };
 
+export type CoachTask = {
+  id: string;
+  user_id: string;
+  coach_id: string;
+  task_text: string;
+  task_subtasks: string[] | null;
+  status: "pending" | "active" | "completed" | "skipped";
+  completed_subtasks: number[] | null;
+  notes: string | null;
+  coach_feedback: string | null;
+  created_at: string;
+  updated_at: string | null;
+  completed_at: string | null;
+  priority: number | null;
+};

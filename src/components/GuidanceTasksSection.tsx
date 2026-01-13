@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import useSWR from "swr";
 import { useCoachRole } from "../hooks/useSupabaseAuth";
 import { fetchClientGuidanceTasks } from "../lib/fetchGuidanceTasks";
@@ -45,16 +45,96 @@ function GuidanceTaskItem({
   task,
   onEdit,
   onSubtaskToggle,
+  onFeedbackSubmit,
 }: {
   task: CoachTask;
   onEdit: () => void;
   onSubtaskToggle: (taskId: string, index: number) => void;
+  onFeedbackSubmit: () => void;
 }) {
+  const [feedbackText, setFeedbackText] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const subtasks = task.task_subtasks || [];
   const completedSubtasks = task.completed_subtasks || [];
+  const needsFeedback = task.status === "completed" && !task.coach_feedback;
 
   const handleSubtaskToggle = (index: number) => {
     onSubtaskToggle(task.id, index);
+  };
+
+  const handleFeedbackSubmit = async () => {
+    if (!feedbackText.trim() || isSubmitting) return;
+
+    setIsSubmitting(true);
+    const supabase = createSupabaseBrowserClient();
+
+    // Update the task with feedback
+    const { data: updatedTask, error: updateError } = await supabase
+      .from("coach_tasks")
+      .update({ coach_feedback: feedbackText.trim() })
+      .eq("id", task.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error("Error submitting feedback:", updateError);
+      alert(`Failed to submit feedback: ${updateError.message}`);
+      setIsSubmitting(false);
+      return;
+    }
+
+      // Send a beautifully designed message to the user via API
+      try {
+        // Get coach info for the message
+        const { data: { user: coachUser } } = await supabase.auth.getUser();
+        if (coachUser) {
+          const { data: coach } = await supabase
+            .from("coaches")
+            .select("id, full_name")
+            .eq("user_id", coachUser.id)
+            .maybeSingle();
+
+          if (coach) {
+            const coachName = coach.full_name || "Your coach";
+            // Create a clean, professional, masculine feedback message
+            const taskPreview = task.task_text.length > 50 
+              ? task.task_text.substring(0, 50) + "..." 
+              : task.task_text;
+            
+            const messageContent = `Premium Feedback from ${coachName}\n\nYour coach has reviewed your completed task:\n"${taskPreview}"\n\nFeedback:\n${feedbackText.trim()}\n\nView full details: Check your completed tasks in Guidance for the complete feedback and insights.`;
+
+            // Get session token for API call
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.access_token) {
+              // Call API route to send message
+              const response = await fetch("/api/send-feedback-message", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({
+                  user_id: task.user_id,
+                  coach_id: task.coach_id,
+                  messageContent: messageContent,
+                }),
+              });
+
+              if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                console.error("Error sending message:", errorData);
+              }
+            }
+          }
+        }
+      } catch (messageError) {
+        console.error("Error sending message:", messageError);
+        // Don't fail the feedback submission if message fails
+      }
+
+    setIsSubmitting(false);
+    setFeedbackText("");
+    onFeedbackSubmit();
   };
 
   return (
@@ -166,6 +246,51 @@ function GuidanceTaskItem({
         </div>
       )}
 
+      {needsFeedback && (
+        <div className="mb-4 p-4 rounded-xl bg-gradient-to-br from-amber-950/90 via-orange-950/80 to-amber-950/90 border-2 border-amber-500/40 shadow-lg shadow-amber-500/20">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-500/20 border border-amber-400/40 flex items-center justify-center">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-amber-300 animate-pulse"
+              >
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-bold text-amber-300/90 uppercase tracking-wider mb-1">
+                Provide Feedback
+              </p>
+              <p className="text-xs text-amber-200/70 mb-3">
+                Your client completed this task and is waiting for your feedback.
+              </p>
+              <textarea
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+                placeholder="Share your thoughts, encouragement, or next steps..."
+                className="w-full p-3 backdrop-blur-sm bg-white/5 border border-amber-400/30 rounded-lg text-sm text-white placeholder:text-amber-300/50 focus:border-amber-400/60 focus:outline-none resize-none mb-2"
+                rows={3}
+                disabled={isSubmitting}
+              />
+              <button
+                onClick={handleFeedbackSubmit}
+                disabled={!feedbackText.trim() || isSubmitting}
+                className="w-full py-2 px-4 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 text-white text-sm font-semibold rounded-lg transition-all active:scale-95 shadow-lg shadow-amber-500/30 disabled:shadow-none"
+              >
+                {isSubmitting ? "Submitting..." : "Submit Feedback"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {task.coach_feedback && (
         <div className="mb-4 p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/30">
           <p className="text-xs font-semibold text-indigo-300/90 uppercase tracking-wider mb-2">
@@ -193,6 +318,17 @@ export function GuidanceTasksSection({
   const { isCoach, loading: coachLoading } = useCoachRole();
   const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
   const [editingTask, setEditingTask] = useState<CoachTask | null>(null);
+
+  // Check URL params for tab
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam === "completed") {
+        setActiveTab("completed");
+      }
+    }
+  }, []);
 
   const { data: tasks = [], mutate } = useSWR(
     coachId ? ["guidance-tasks", userId, coachId] : null,
@@ -380,6 +516,7 @@ export function GuidanceTasksSection({
                 task={task}
                 onEdit={() => setEditingTask(task)}
                 onSubtaskToggle={handleSubtaskToggle}
+                onFeedbackSubmit={handleTaskUpdated}
               />
             ))}
           </div>

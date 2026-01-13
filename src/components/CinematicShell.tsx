@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSupabaseAuth } from "../hooks/useSupabaseAuth";
+import { usePendingMessages } from "../hooks/usePendingMessages";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
@@ -16,6 +17,7 @@ export function CinematicShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useSupabaseAuth();
+  const { pendingCount } = usePendingMessages();
 
   const handleLogout = async () => {
     const { createSupabaseBrowserClient } = await import("../lib/supabaseClient");
@@ -52,17 +54,33 @@ export function CinematicShell({ children }: { children: React.ReactNode }) {
                 item.href === "/clients"
                   ? pathname.startsWith("/clients")
                   : pathname === item.href;
+              const isInbox = item.href === "/inbox";
+              const showBadge = isInbox && pendingCount > 0;
+              
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`focus-outline rounded-full px-3 py-1.5 transition-all ${
+                  className={`focus-outline relative rounded-full px-3 py-1.5 transition-all ${
                     active
                       ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/50"
                       : "text-slate-300/80 hover:bg-slate-800/80 hover:text-slate-50"
                   }`}
                 >
                   {item.label}
+                  {showBadge && (
+                    <>
+                      {/* Pulsing glow effect */}
+                      <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75" />
+                        <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-amber-400/80" />
+                        {/* Badge with count */}
+                        <span className="relative z-10 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 px-1.5 text-[10px] font-black text-white shadow-[0_0_15px_rgba(251,191,36,0.8),inset_0_1px_0_rgba(255,255,255,0.3)] ring-2 ring-amber-300/50 animate-bounce-slow">
+                          {pendingCount > 99 ? "99+" : pendingCount}
+                        </span>
+                      </span>
+                    </>
+                  )}
                 </Link>
               );
             })}

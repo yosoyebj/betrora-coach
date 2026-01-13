@@ -19,21 +19,11 @@ export function GuidanceTaskEdit({
   const [subtasks, setSubtasks] = useState<string[]>(
     task.task_subtasks || []
   );
-  const [status, setStatus] = useState<CoachTask["status"]>(task.status);
-  const [priority, setPriority] = useState<number>(
-    task.priority ?? 0
-  );
-  const [coachFeedback, setCoachFeedback] = useState(
-    task.coach_feedback || ""
-  );
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setTaskText(task.task_text);
     setSubtasks(task.task_subtasks || []);
-    setStatus(task.status);
-    setPriority(task.priority ?? 0);
-    setCoachFeedback(task.coach_feedback || "");
   }, [task]);
 
   const addSubtaskField = () => {
@@ -62,17 +52,7 @@ export function GuidanceTaskEdit({
     const updateData: any = {
       task_text: taskText.trim(),
       task_subtasks: validSubtasks.length > 0 ? validSubtasks : null,
-      status,
-      priority: priority || 0,
-      coach_feedback: coachFeedback.trim() || null,
     };
-
-    // Set completed_at when status changes to completed
-    if (status === "completed" && task.status !== "completed") {
-      updateData.completed_at = new Date().toISOString();
-    } else if (status !== "completed" && task.status === "completed") {
-      updateData.completed_at = null;
-    }
 
     const { error } = await supabase
       .from("coach_tasks")
@@ -180,53 +160,6 @@ export function GuidanceTaskEdit({
                 </button>
               )}
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Status
-              </label>
-              <select
-                value={status}
-                onChange={(e) =>
-                  setStatus(e.target.value as CoachTask["status"])
-                }
-                className="w-full p-3 backdrop-blur-sm bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:border-indigo-500/50 focus:outline-none"
-              >
-                <option value="pending">Pending</option>
-                <option value="active">Active</option>
-                <option value="completed">Completed</option>
-                <option value="skipped">Skipped</option>
-              </select>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Priority
-              </label>
-              <input
-                type="number"
-                value={priority}
-                onChange={(e) => setPriority(parseInt(e.target.value) || 0)}
-                min="0"
-                className="w-full p-3 backdrop-blur-sm bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-slate-500 focus:border-indigo-500/50 focus:outline-none"
-                placeholder="0"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Coach Feedback
-            </label>
-            <textarea
-              value={coachFeedback}
-              onChange={(e) => setCoachFeedback(e.target.value)}
-              placeholder="Add feedback for the client..."
-              className="w-full p-3 backdrop-blur-sm bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-slate-500 focus:border-indigo-500/50 focus:outline-none resize-none"
-              rows={4}
-            />
           </div>
 
           <div className="flex gap-3 pt-2">
