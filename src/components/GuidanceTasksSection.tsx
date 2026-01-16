@@ -430,34 +430,49 @@ export function GuidanceTasksSection({
 
   return (
     <div className="space-y-5">
-      <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-2">
-          <div className="mt-1 flex-shrink-0 w-5 h-5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-indigo-300/90">
+      {/* Unified Header + Create Section */}
+      <section className="rounded-3xl border-l-4 border-indigo-500/80 border border-slate-800/80 bg-gradient-to-br from-indigo-950/40 via-slate-950/80 to-slate-950/80 p-5 shadow-xl shadow-indigo-500/10">
+        {/* Header */}
+        <div className="flex items-start gap-3 mb-5">
+          <div className="mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-indigo-300/90">
               <path d="M9 11l3 3L22 4" />
               <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
             </svg>
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs uppercase tracking-[0.28em] text-indigo-300/90 font-semibold">
-              Guidance Tasks
+              Create Microtasks
             </p>
             <h2 className="text-xl font-semibold text-slate-50 mt-1">
-              Client Guidance Management
+              Guidance Tasks
             </h2>
-            <p className="text-sm text-slate-300/90 mt-1">
-              Create and manage guidance tasks for this client. Track progress,
-              provide feedback, and help them stay on track.
+            <p className="text-sm text-slate-300/90 mt-2 leading-relaxed">
+              This is where you create microtasks for your client. Break down goals into small, actionable steps they can complete daily. Track their progress and provide feedback to keep them moving forward.
             </p>
           </div>
         </div>
-      </section>
 
-      <GuidanceTaskCreate
-        userId={userId}
-        coachId={coachId}
-        onTaskCreated={handleTaskCreated}
-      />
+        {/* Divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-slate-700/50 to-transparent mb-5" />
+
+        {/* Create Task Input */}
+        <div>
+          <div className="mb-3">
+            <p className="text-xs uppercase tracking-[0.26em] text-indigo-300/80 font-semibold mb-1">
+              New Microtask
+            </p>
+            <p className="text-[11px] text-slate-400/90">
+              Enter the task and optional steps below
+            </p>
+          </div>
+          <GuidanceTaskCreate
+            userId={userId}
+            coachId={coachId}
+            onTaskCreated={handleTaskCreated}
+          />
+        </div>
+      </section>
 
       <div className="rounded-3xl border-l-4 border-indigo-500/80 border border-slate-800/80 bg-gradient-to-br from-indigo-950/40 via-slate-950/80 to-slate-950/80 p-5 shadow-xl shadow-indigo-500/10">
         <div className="flex items-center gap-2 mb-5">

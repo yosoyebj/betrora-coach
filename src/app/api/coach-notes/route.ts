@@ -152,6 +152,79 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // Sanitize HTML content - allow only safe formatting tags (preserve closing tags + basic styles)
+    const sanitizeHTML = (html: string): string => {
+      if (!html || typeof html !== "string") return "";
+
+      const allowedTags = [
+        "p",
+        "div",
+        "br",
+        "strong",
+        "b",
+        "em",
+        "i",
+        "u",
+        "ul",
+        "ol",
+        "li",
+        "span",
+        "font",
+      ];
+
+      // Remove script + JS handlers
+      let sanitized = html
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+        .replace(/on\w+="[^"]*"/gi, "")
+        .replace(/on\w+='[^']*'/gi, "")
+        .replace(/javascript:/gi, "");
+
+      // Remove tags NOT in allowlist (keeps both <tag> and </tag>)
+      const tagPattern = new RegExp(
+        `<(?!/?(${allowedTags.join("|")})\\b)[^>]+>`,
+        "gi"
+      );
+      sanitized = sanitized.replace(tagPattern, "");
+
+      // Strip unsafe styles but keep a small allowlist
+      sanitized = sanitized.replace(/style="([^"]*)"/gi, (_m, styles) => {
+        const safe = String(styles)
+          .split(";")
+          .map((s) => s.trim())
+          .filter((s) =>
+            /^(font-size|font-weight|font-style|text-decoration)\s*:/i.test(s)
+          )
+          .join("; ");
+        return safe ? `style="${safe}"` : "";
+      });
+
+      // Convert <font size="..."> into <span style="font-size:...">
+      sanitized = sanitized.replace(
+        /<font[^>]*size=["']?(\d+)["']?[^>]*>(.*?)<\/font>/gi,
+        (_m, size, inner) => {
+          const sizeMap: Record<string, string> = {
+            "1": "10px",
+            "2": "12px",
+            "3": "14px",
+            "4": "16px",
+            "5": "18px",
+            "6": "24px",
+            "7": "32px",
+          };
+          return `<span style="font-size:${sizeMap[String(size)] || "14px"};">${inner}</span>`;
+        }
+      );
+
+      // Limit length (max 50KB)
+      if (sanitized.length > 50000) {
+        sanitized = sanitized.substring(0, 50000);
+      }
+
+      return sanitized;
+    };
+
+    const sanitizedNote = sanitizeHTML(note);
+
     // Verify coach and subscription
     const { error: verifyError, coachId } = await verifyCoachAndSubscription(
       supabaseWithAuth,
@@ -169,7 +242,7 @@ export async function PUT(request: NextRequest) {
         {
           user_id,
           coach_id: coachId,
-          note: note || "",
+          note: sanitizedNote || "",
         },
         {
           onConflict: "user_id,coach_id",

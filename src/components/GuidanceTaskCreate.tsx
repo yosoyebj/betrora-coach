@@ -67,9 +67,9 @@ export function GuidanceTaskCreate({
   };
 
   return (
-    <div className="rounded-3xl border border-slate-800/80 bg-slate-950/80 p-4 shadow-xl shadow-black/50">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
           <input
             type="text"
             value={text}
@@ -80,26 +80,27 @@ export function GuidanceTaskCreate({
                 handleSubmit();
               }
             }}
-            placeholder="What's the next focus for this client?"
-            className="flex-1 bg-transparent border-none outline-none text-base text-white placeholder:text-slate-500 h-10 w-full min-w-0"
+            placeholder="What microtask should your client focus on next?"
+            className="focus-outline w-full rounded-xl border border-slate-700/80 bg-slate-900/60 px-4 py-3 text-sm text-slate-50 placeholder:text-slate-500 shadow-inner shadow-black/50 focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
             disabled={isCreating}
             onFocus={() => {
               setIsExpanded(true);
               if (subtasks.length === 0) setSubtasks([""]);
             }}
           />
-
-          <button
-            onClick={handleSubmit}
-            disabled={!text.trim() || isCreating}
-            className="h-10 px-5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 text-white text-sm font-semibold transition-all active:scale-95 shadow-lg shadow-indigo-500/20 disabled:shadow-none whitespace-nowrap backdrop-blur-sm border border-white/10"
-          >
-            {isCreating ? "..." : "Create"}
-          </button>
         </div>
 
+        <button
+          onClick={handleSubmit}
+          disabled={!text.trim() || isCreating}
+          className="focus-outline h-11 px-6 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 text-white text-sm font-semibold transition-all active:scale-95 shadow-lg shadow-indigo-500/20 disabled:shadow-none whitespace-nowrap"
+        >
+          {isCreating ? "Creating..." : "Create Task"}
+        </button>
+      </div>
+
         {(isExpanded || subtasks.length > 0) && (
-          <div className="flex flex-col gap-2 pt-2 border-t border-white/10 animate-in slide-in-from-top-2 fade-in duration-200">
+          <div className="flex flex-col gap-2 pt-3 border-t border-slate-800/50">
             {subtasks.map((st, i) => (
               <div
                 key={i}
@@ -171,7 +172,6 @@ export function GuidanceTaskCreate({
             )}
           </div>
         )}
-      </div>
     </div>
   );
 }
