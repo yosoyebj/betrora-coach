@@ -69,15 +69,20 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
-    // Check if user is a coach
+    // Check for impersonation in URL params (magic link redirect)
+    const impersonationId = request.nextUrl.searchParams.get("impersonation_id");
+    const targetType = request.nextUrl.searchParams.get("target_type");
+    const isImpersonatingCoach = impersonationId && targetType === "coach";
+
+    // Check if user is a coach (or being impersonated as a coach)
     const { data: coach } = await supabase
       .from("coaches")
       .select("id")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (!coach) {
-      // User is authenticated but not a coach
+    if (!coach && !isImpersonatingCoach) {
+      // User is authenticated but not a coach and not being impersonated as a coach
       return NextResponse.redirect(new URL("/login?error=not_coach", request.url));
     }
   }
