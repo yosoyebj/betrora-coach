@@ -9,6 +9,7 @@ import { useCoachRole } from "../../hooks/useSupabaseAuth";
 import { StatCard } from "../../components/StatCard";
 import { ActiveClientsModal } from "../../components/ActiveClientsModal";
 import { PendingFeedbackNotification } from "../../components/PendingFeedbackNotification";
+import { PendingSessionApprovalNotification } from "../../components/PendingSessionApprovalNotification";
 import useSWR from "swr";
 import { createSupabaseBrowserClient } from "../../lib/supabaseClient";
 
@@ -134,6 +135,7 @@ export default function DashboardPage() {
       ) : (
         <div className="space-y-6">
           <PendingFeedbackNotification coachId={coach?.id ?? null} />
+          <PendingSessionApprovalNotification coachId={coach?.id ?? null} />
           
           <section className="flex flex-col gap-4 rounded-3xl border border-slate-800/80 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-5 shadow-2xl shadow-amber-500/20 sm:flex-row sm:items-center sm:justify-between">
             <div className="max-w-xl space-y-2">

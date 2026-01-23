@@ -9,6 +9,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/inbox", label: "Inbox" },
   { href: "/clients", label: "Clients" },
+  { href: "/sessions", label: "Sessions" },
   { href: "/progress", label: "Progress" },
   { href: "/profile", label: "Profile" },
 ];
@@ -53,6 +54,8 @@ export function CinematicShell({ children }: { children: React.ReactNode }) {
               const active =
                 item.href === "/clients"
                   ? pathname.startsWith("/clients")
+                  : item.href === "/sessions"
+                  ? pathname.startsWith("/sessions") || pathname.startsWith("/availability")
                   : pathname === item.href;
               const isInbox = item.href === "/inbox";
               const showBadge = isInbox && pendingCount > 0;
@@ -118,6 +121,44 @@ export function CinematicShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
+
+      {/* Sub-navigation for Sessions section */}
+      {(pathname.startsWith("/sessions") || pathname.startsWith("/availability")) && (
+        <div className="border-b border-slate-800/70 bg-slate-950/50 backdrop-blur-sm">
+          <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2 sm:px-6 lg:px-8">
+            <Link
+              href="/sessions"
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                pathname === "/sessions"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                  : "text-slate-300/60 hover:text-slate-200 hover:bg-slate-800/50"
+              }`}
+            >
+              Sessions
+            </Link>
+            <Link
+              href="/availability"
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                pathname === "/availability"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                  : "text-slate-300/60 hover:text-slate-200 hover:bg-slate-800/50"
+              }`}
+            >
+              Availability
+            </Link>
+            <Link
+              href="/sessions/live"
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                pathname === "/sessions/live"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                  : "text-slate-300/60 hover:text-slate-200 hover:bg-slate-800/50"
+              }`}
+            >
+              Live
+            </Link>
+          </div>
+        </div>
+      )}
 
       <main className="mx-auto flex max-w-6xl flex-1 flex-col gap-4 px-4 pb-10 pt-6 sm:px-6 lg:px-8">
         {children}
