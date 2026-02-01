@@ -32,6 +32,12 @@ type CoachMessageRow = {
   updated_at: string | null;
 };
 
+type ClientProfileRow = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+};
+
 async function fetchClients(): Promise<ClientWithMetadata[]> {
   const supabase = createSupabaseBrowserClient();
 
@@ -105,8 +111,10 @@ async function fetchClients(): Promise<ClientWithMetadata[]> {
     }
   });
 
+  const userRows = (users ?? []) as ClientProfileRow[];
+
   // Build normalized client array
-  const clients: ClientWithMetadata[] = users.map((user) => {
+  const clients: ClientWithMetadata[] = userRows.map((user) => {
     const userMessages = messageMap.get(user.id) || [];
     const pendingCount = pendingCountMap.get(user.id) || 0;
 
