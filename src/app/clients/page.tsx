@@ -18,6 +18,11 @@ type ClientWithMetadata = {
   status: "needs_reply" | "active" | "quiet" | "new";
 };
 
+type CoachSubscription = {
+  user_id: string;
+  created_at: string | null;
+};
+
 async function fetchClients(): Promise<ClientWithMetadata[]> {
   const supabase = createSupabaseBrowserClient();
 
@@ -42,13 +47,15 @@ async function fetchClients(): Promise<ClientWithMetadata[]> {
     .eq("coach_id", coachId)
     .eq("status", "active");
 
-  if (subError || !subscriptions || subscriptions.length === 0) {
+  const subscriptionRows = (subscriptions ?? []) as CoachSubscription[];
+
+  if (subError || subscriptionRows.length === 0) {
     return [];
   }
 
-  const clientIds = subscriptions.map((s) => s.user_id);
+  const clientIds = subscriptionRows.map((s) => s.user_id);
   const subscriptionMap = new Map(
-    subscriptions.map((s) => [s.user_id, s.created_at])
+    subscriptionRows.map((s) => [s.user_id, s.created_at])
   );
 
   // Get client profiles
