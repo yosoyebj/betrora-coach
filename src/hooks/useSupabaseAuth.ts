@@ -19,13 +19,15 @@ export function useSupabaseAuth() {
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth
+      .getSession()
+      .then(({ data }: { data: { session: Session | null } }) => {
       setState({
         session: data.session,
         user: data.session?.user ?? null,
         loading: false,
       });
-    });
+      });
 
     const {
       data: { subscription },
