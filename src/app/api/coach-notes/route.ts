@@ -8,6 +8,7 @@ async function verifyCoachAndSubscription(
   supabaseWithAuth: ReturnType<typeof createClient>,
   user_id: string,
 ) {
+  type CoachRow = { id: string };
   // Get the current user
   const {
     data: { user },
@@ -23,7 +24,7 @@ async function verifyCoachAndSubscription(
     .from("coaches")
     .select("id")
     .eq("user_id", user.id)
-    .maybeSingle();
+    .maybeSingle<CoachRow>();
 
   if (coachError || !coach) {
     return { error: "Coach not found or unauthorized", coachId: null };
