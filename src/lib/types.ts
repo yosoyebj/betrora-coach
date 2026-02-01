@@ -22,6 +22,18 @@ export type Coach = {
   updated_at: string | null;
 };
 
+export type CoachAvailability = {
+  id: string;
+  coach_id: string;
+  day_of_week: number;
+  start_time_minutes: number;
+  end_time_minutes: number;
+  timezone: string | null;
+  is_active: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 export type CoachMessage = {
   id: string;
   user_id: string;
