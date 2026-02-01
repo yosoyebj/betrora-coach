@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { createSupabaseBrowserClient } from "../lib/supabaseClient";
 
+type PendingMessageRow = {
+  user_id: string;
+  coach_id: string;
+};
+
 async function fetchPendingChatCount(): Promise<number> {
   const supabase = createSupabaseBrowserClient();
   
@@ -44,8 +49,9 @@ async function fetchPendingChatCount(): Promise<number> {
 
   // Count unique chat combinations (user_id + coach_id pairs)
   // Each unique combination represents one chat/conversation with new unread messages
+  const messageRows = (data ?? []) as PendingMessageRow[];
   const uniqueChats = new Set(
-    data.map((msg) => `${msg.user_id}-${msg.coach_id}`)
+    messageRows.map((msg) => `${msg.user_id}-${msg.coach_id}`)
   );
 
   const count = uniqueChats.size;
