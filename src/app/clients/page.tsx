@@ -23,6 +23,15 @@ type CoachSubscription = {
   created_at: string | null;
 };
 
+type CoachMessageRow = {
+  user_id: string;
+  message: string | null;
+  coach_response: string | null;
+  status: string | null;
+  created_at: string;
+  updated_at: string | null;
+};
+
 async function fetchClients(): Promise<ClientWithMetadata[]> {
   const supabase = createSupabaseBrowserClient();
 
@@ -78,11 +87,13 @@ async function fetchClients(): Promise<ClientWithMetadata[]> {
     console.error("Error fetching messages:", messagesError);
   }
 
+  const messageRows = (messages ?? []) as CoachMessageRow[];
+
   // Process messages per client
-  const messageMap = new Map<string, any[]>();
+  const messageMap = new Map<string, CoachMessageRow[]>();
   const pendingCountMap = new Map<string, number>();
 
-  (messages || []).forEach((msg) => {
+  messageRows.forEach((msg) => {
     const userId = msg.user_id;
     if (!messageMap.has(userId)) {
       messageMap.set(userId, []);
