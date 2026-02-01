@@ -9,6 +9,10 @@ export type PendingFeedbackTask = CoachTask & {
   } | null;
 };
 
+type UserRow = {
+  id: string;
+};
+
 export async function fetchPendingFeedbackTasks(
   coachId: string
 ): Promise<PendingFeedbackTask[]> {
@@ -58,9 +62,8 @@ export async function fetchPendingFeedbackTasks(
     })) as PendingFeedbackTask[];
   }
 
-  const usersMap = new Map(
-    (usersData || []).map((u) => [u.id, u])
-  );
+  const users = (usersData ?? []) as UserRow[];
+  const usersMap = new Map(users.map((u) => [u.id, u]));
 
   return tasksNeedingFeedback.map((task) => ({
     ...task,

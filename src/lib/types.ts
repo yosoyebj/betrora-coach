@@ -82,9 +82,7 @@ export type CoachSessionStatus =
   | "pending_approval"
   | "completed"
   | "cancelled"
-  | "no_show";
-
-export type CoachSessionUser = {
+  | "no_show";export type CoachSessionUser = {
   id: string;
   full_name: string | null;
   email: string | null;
