@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 async function verifyCoachAndSubscription(
-  supabaseWithAuth: ReturnType<typeof createClient>,
+  supabaseWithAuth: SupabaseClient<any, "public">,
   user_id: string,
 ) {
   type CoachRow = { id: string };
