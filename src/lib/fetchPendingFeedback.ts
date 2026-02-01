@@ -31,8 +31,10 @@ export async function fetchPendingFeedbackTasks(
     return [];
   }
 
+  const taskRows = (tasksData ?? []) as CoachTask[];
+
   // Filter for tasks that need feedback (null or empty string)
-  const tasksNeedingFeedback = tasksData.filter(
+  const tasksNeedingFeedback = taskRows.filter(
     (task) => !task.coach_feedback || task.coach_feedback.trim() === ""
   );
 
@@ -41,7 +43,7 @@ export async function fetchPendingFeedbackTasks(
   }
 
   // Now fetch user data for each task
-  const userIds = [...new Set(tasksData.map((t) => t.user_id))];
+  const userIds = [...new Set(taskRows.map((t) => t.user_id))];
   const { data: usersData, error: usersError } = await supabase
     .from("users")
     .select("id, full_name, email")
@@ -50,7 +52,7 @@ export async function fetchPendingFeedbackTasks(
   if (usersError) {
     console.error("Error fetching users:", usersError);
     // Return tasks without user data
-    return tasksData.map((task) => ({
+    return taskRows.map((task) => ({
       ...task,
       user: null,
     })) as PendingFeedbackTask[];

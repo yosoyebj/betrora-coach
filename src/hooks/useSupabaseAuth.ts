@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Session, User } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 import { createSupabaseBrowserClient } from "../lib/supabaseClient";
 import useSWR from "swr";
 
@@ -31,13 +31,15 @@ export function useSupabaseAuth() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(
+      (_event: AuthChangeEvent, session: Session | null) => {
       setState({
         session: session,
         user: session?.user ?? null,
         loading: false,
       });
-    });
+      }
+    );
 
     return () => {
       subscription.unsubscribe();
