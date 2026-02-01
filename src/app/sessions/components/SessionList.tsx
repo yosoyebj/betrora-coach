@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { CoachSession } from "../../../lib/types";
+import { useRouter } from "next/navigation";
+import type { CoachSession } from "../../../lib/types";
 import MeetingLinkForm from "./MeetingLinkForm";
 import { createSupabaseBrowserClient } from "../../../lib/supabaseClient";
 
@@ -25,7 +26,7 @@ function formatDateTime(dateStr: string, timezone: string | null): string {
       timeZone: tz,
       hour12: true,
     }).format(date);
-  } catch {
+  } catch (error) {
     return date.toLocaleString();
   }
 }
@@ -59,6 +60,7 @@ export default function SessionList({
   onUpdate,
   readOnly = false,
 }: SessionListProps) {
+  const router = useRouter();
   const [selectedSession, setSelectedSession] = useState<CoachSession | null>(
     null
   );
@@ -179,27 +181,33 @@ export default function SessionList({
               )}
 
               {!readOnly && isScheduled && (
-                <div className="flex gap-2 mt-3">
+                <div className="flex gap-2 mt-3 flex-wrap">
+                  <button
+                    onClick={() => router.push(`/room/${session.id}`)}
+                    className="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-500/30 transition-colors min-w-[120px]"
+                  >
+                    Join Room
+                  </button>
                   {!session.meeting_link && (
                     <button
                       onClick={() => {
                         setSelectedSession(session);
                         setShowMeetingForm(true);
                       }}
-                      className="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-colors"
+                      className="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-colors min-w-[120px]"
                     >
                       Add Meeting Link
                     </button>
                   )}
                   <button
                     onClick={() => handleMarkComplete(session.id)}
-                    className="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 transition-colors"
+                    className="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 transition-colors min-w-[100px]"
                   >
                     Mark Complete
                   </button>
                   <button
                     onClick={() => handleMarkNoShow(session.id)}
-                    className="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30 transition-colors"
+                    className="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30 transition-colors min-w-[100px]"
                   >
                     No Show
                   </button>

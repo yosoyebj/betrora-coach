@@ -63,3 +63,41 @@ export type CoachNote = {
   created_at: string;
   updated_at: string;
 };
+
+export type CoachSessionStatus =
+  | "scheduled"
+  | "rescheduled"
+  | "pending_approval"
+  | "completed"
+  | "cancelled"
+  | "no_show";
+
+export type CoachSessionUser = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+};
+
+export type CoachSession = {
+  id: string;
+  user_id: string;
+  coach_id: string;
+  subscription_id: string | null;
+  scheduled_at: string;
+  duration_minutes: number | null;
+  timezone: string | null;
+  status: CoachSessionStatus;
+  meeting_link: string | null;
+  meeting_id: string | null;
+  meeting_password: string | null;
+  coach_notes: string | null;
+  user_notes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  pending_approval_at?: string | null;
+  approved_at?: string | null;
+  rejected_at?: string | null;
+  user?: CoachSessionUser | null;
+};

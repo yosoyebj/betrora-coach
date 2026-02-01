@@ -152,7 +152,7 @@ export function PendingSessionApprovalNotification({
         timeZone: tz,
         hour12: true,
       }).format(date);
-    } catch {
+    } catch (error) {
       return date.toLocaleString();
     }
   };

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "../../lib/supabaseClient";
+import { logDebugEvent } from "../../lib/debugLogger";
 import { useSupabaseAuth } from "../../hooks/useSupabaseAuth";
 import Link from "next/link";
 
@@ -26,7 +27,18 @@ export default function LoginPage() {
 
     const handleMagicLink = async () => {
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/b1090503-e041-4158-bb6e-0faf9900d5ab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'login/page.tsx:22',message:'handleMagicLink started',data:{hash:window.location.hash.substring(0,100),search:window.location.search.substring(0,100)},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'A,F'})}).catch(()=>{});
+      logDebugEvent({
+        location: "login/page.tsx:22",
+        message: "handleMagicLink started",
+        data: {
+          hash: window.location.hash.substring(0, 100),
+          search: window.location.search.substring(0, 100),
+        },
+        timestamp: Date.now(),
+        sessionId: "debug-session",
+        runId: "run3",
+        hypothesisId: "A,F",
+      });
       // #endregion
       
       try {
@@ -67,13 +79,40 @@ export default function LoginPage() {
         }
 
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/b1090503-e041-4158-bb6e-0faf9900d5ab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'login/page.tsx:40',message:'getSessionFromUrl result',data:{hasSession:!!data?.session,hasUser:!!data?.session?.user,hasError:!!sessionError,errorMessage:sessionError?.message,userId:data?.session?.user?.id,impersonationId,targetType},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'B'})}).catch(()=>{});
+      logDebugEvent({
+        location: "login/page.tsx:40",
+        message: "getSessionFromUrl result",
+        data: {
+          hasSession: !!data?.session,
+          hasUser: !!data?.session?.user,
+          hasError: !!sessionError,
+          errorMessage: sessionError?.message,
+          userId: data?.session?.user?.id,
+          impersonationId,
+          targetType,
+        },
+        timestamp: Date.now(),
+        sessionId: "debug-session",
+        runId: "run3",
+        hypothesisId: "B",
+      });
       // #endregion
 
       if (sessionError || !data?.session) {
         // Not a magic link or session creation failed
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/b1090503-e041-4158-bb6e-0faf9900d5ab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'login/page.tsx:45',message:'No session from URL',data:{hasError:!!sessionError,errorMessage:sessionError?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'A,B'})}).catch(()=>{});
+        logDebugEvent({
+          location: "login/page.tsx:45",
+          message: "No session from URL",
+          data: {
+            hasError: !!sessionError,
+            errorMessage: sessionError?.message,
+          },
+          timestamp: Date.now(),
+          sessionId: "debug-session",
+          runId: "run3",
+          hypothesisId: "A,B",
+        });
         // #endregion
         setProcessingMagicLink(false);
         // Clean up URL params if there was an error
@@ -91,7 +130,19 @@ export default function LoginPage() {
       // Successfully got session from URL
       if (data.session?.user) {
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/b1090503-e041-4158-bb6e-0faf9900d5ab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'login/page.tsx:55',message:'Checking coach status',data:{userId:data.session.user.id,impersonationId,targetType},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'C'})}).catch(()=>{});
+            logDebugEvent({
+              location: "login/page.tsx:55",
+              message: "Checking coach status",
+              data: {
+                userId: data.session.user.id,
+                impersonationId,
+                targetType,
+              },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              runId: "run3",
+              hypothesisId: "C",
+            });
             // #endregion
             // Verify the user is a coach (or has impersonation context for coach)
             const { data: coach, error: coachError } = await supabase
@@ -101,13 +152,40 @@ export default function LoginPage() {
               .maybeSingle();
 
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/b1090503-e041-4158-bb6e-0faf9900d5ab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'login/page.tsx:59',message:'Coach check result',data:{hasCoach:!!coach,coachStatus:coach?.status,hasError:!!coachError,errorMessage:coachError?.message,impersonationId,targetType},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+            logDebugEvent({
+              location: "login/page.tsx:59",
+              message: "Coach check result",
+              data: {
+                hasCoach: !!coach,
+                coachStatus: coach?.status,
+                hasError: !!coachError,
+                errorMessage: coachError?.message,
+                impersonationId,
+                targetType,
+              },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              runId: "run1",
+              hypothesisId: "C",
+            });
             // #endregion
 
             if (coachError || !coach) {
               // Check if this is an impersonation session (use values already extracted from currentHashParams)
               // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/b1090503-e041-4158-bb6e-0faf9900d5ab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'login/page.tsx:99',message:'Checking impersonation fallback',data:{impersonationId,targetType,targetTypeIsCoach:targetType==='coach'},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'C'})}).catch(()=>{});
+              logDebugEvent({
+                location: "login/page.tsx:99",
+                message: "Checking impersonation fallback",
+                data: {
+                  impersonationId,
+                  targetType,
+                  targetTypeIsCoach: targetType === "coach",
+                },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                runId: "run2",
+                hypothesisId: "C",
+              });
               // #endregion
 
               if (impersonationId && targetType === "coach") {
@@ -119,7 +197,15 @@ export default function LoginPage() {
                 window.history.replaceState({}, "", url.toString());
                 
                 // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/b1090503-e041-4158-bb6e-0faf9900d5ab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'login/page.tsx:73',message:'Impersonation allowed, calling router.replace',data:{path:'/dashboard'},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'C,D'})}).catch(()=>{});
+                logDebugEvent({
+                  location: "login/page.tsx:73",
+                  message: "Impersonation allowed, calling router.replace",
+                  data: { path: "/dashboard" },
+                  timestamp: Date.now(),
+                  sessionId: "debug-session",
+                  runId: "run3",
+                  hypothesisId: "C,D",
+                });
                 // #endregion
                 // Redirect to dashboard - middleware will allow impersonation
                 router.replace("/dashboard");
@@ -157,14 +243,32 @@ export default function LoginPage() {
             window.history.replaceState({}, "", url.toString());
 
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/b1090503-e041-4158-bb6e-0faf9900d5ab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'login/page.tsx:113',message:'Regular coach signin, calling router.replace',data:{path:'/dashboard'},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'D'})}).catch(()=>{});
+            logDebugEvent({
+              location: "login/page.tsx:113",
+              message: "Regular coach signin, calling router.replace",
+              data: { path: "/dashboard" },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              runId: "run3",
+              hypothesisId: "D",
+            });
             // #endregion
             // Redirect to dashboard
             router.replace("/dashboard");
           }
         } catch (err) {
           // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/b1090503-e041-4158-bb6e-0faf9900d5ab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'login/page.tsx:118',message:'Error in handleMagicLink catch block',data:{errorMessage:err instanceof Error ? err.message : String(err)},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'B'})}).catch(()=>{});
+          logDebugEvent({
+            location: "login/page.tsx:118",
+            message: "Error in handleMagicLink catch block",
+            data: {
+              errorMessage: err instanceof Error ? err.message : String(err),
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run3",
+            hypothesisId: "B",
+          });
           // #endregion
           console.error("Error processing magic link:", err);
           setError("An error occurred while signing in. Please try again.");
@@ -182,13 +286,29 @@ export default function LoginPage() {
 
   // #region agent log
   useEffect(() => {
-    fetch('http://127.0.0.1:7242/ingest/b1090503-e041-4158-bb6e-0faf9900d5ab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'login/page.tsx:140',message:'Render check',data:{loading,processingMagicLink,hasUser:!!user},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    logDebugEvent({
+      location: "login/page.tsx:140",
+      message: "Render check",
+      data: { loading, processingMagicLink, hasUser: !!user },
+      timestamp: Date.now(),
+      sessionId: "debug-session",
+      runId: "run1",
+      hypothesisId: "E",
+    });
   }, [loading, processingMagicLink, user]);
   // #endregion
 
   if (!loading && !processingMagicLink && user) {
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/b1090503-e041-4158-bb6e-0faf9900d5ab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'login/page.tsx:145',message:'Conditional redirect triggered',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D,E'})}).catch(()=>{});
+    logDebugEvent({
+      location: "login/page.tsx:145",
+      message: "Conditional redirect triggered",
+      data: {},
+      timestamp: Date.now(),
+      sessionId: "debug-session",
+      runId: "run1",
+      hypothesisId: "D,E",
+    });
     // #endregion
     router.replace("/dashboard");
   }

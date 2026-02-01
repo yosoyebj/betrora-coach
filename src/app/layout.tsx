@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
+import { ToastProvider } from "@/components/Toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,8 +31,10 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[radial-gradient(circle_at_top,_#0b0b10,_#02010a_55%)] text-slate-50`}
         suppressHydrationWarning
       >
-        <ImpersonationBanner />
-        {children}
+        <ToastProvider>
+          <ImpersonationBanner />
+          {children}
+        </ToastProvider>
       </body>
     </html>
   );

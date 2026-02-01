@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createSupabaseBrowserClient } from "../../../lib/supabaseClient";
-import { CoachSession } from "../../../lib/types";
+import type { CoachSession } from "../../../lib/types";
 
 interface MeetingLinkFormProps {
   session: CoachSession;
@@ -40,7 +40,7 @@ export default function MeetingLinkForm({
     // Validate URL
     try {
       new URL(meetingLink);
-    } catch {
+    } catch (error) {
       setError("Please enter a valid URL");
       return;
     }

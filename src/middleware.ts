@@ -63,6 +63,7 @@ export async function middleware(request: NextRequest) {
       request.nextUrl.pathname.startsWith("/inbox") ||
       request.nextUrl.pathname.startsWith("/clients") ||
       request.nextUrl.pathname.startsWith("/sessions") ||
+      request.nextUrl.pathname.startsWith("/room") ||
       request.nextUrl.pathname.startsWith("/availability") ||
       request.nextUrl.pathname.startsWith("/progress") ||
       request.nextUrl.pathname.startsWith("/profile")) {

@@ -6,7 +6,7 @@ import { useSupabaseAuth } from "../../../hooks/useSupabaseAuth";
 import { useCoachRole } from "../../../hooks/useSupabaseAuth";
 import useSWR from "swr";
 import { createSupabaseBrowserClient } from "../../../lib/supabaseClient";
-import { CoachSession } from "../../../lib/types";
+import type { CoachSession } from "../../../lib/types";
 import SessionList from "../components/SessionList";
 
 async function fetchLiveSessions() {
