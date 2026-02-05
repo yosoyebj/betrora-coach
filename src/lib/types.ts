@@ -86,9 +86,7 @@ export type CoachSessionStatus =
   id: string;
   full_name: string | null;
   email: string | null;
-};
-
-export type CoachSession = {
+};export type CoachSession = {
   id: string;
   user_id: string;
   coach_id: string;
