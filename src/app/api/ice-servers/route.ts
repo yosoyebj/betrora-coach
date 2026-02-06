@@ -9,17 +9,19 @@ const FALLBACK_ICE_SERVERS = [
   { urls: 'stun:global.stun.twilio.com:3478' },
 ];
 
+/** Fixed channel name; not read from env to avoid secrets in build output. */
+const XIRSYS_CHANNEL = 'default';
+
 /**
  * GET /api/ice-servers
  * Returns ICE server configuration for WebRTC peer connections.
  * Uses Xirsys TURN when env vars are set; otherwise returns STUN fallback.
- * Application is derived from request host (no XIRSYS_APPLICATION env).
+ * Application is derived from request host; channel is fixed (no XIRSYS_* env in build).
  */
 export async function GET(request: NextRequest) {
   try {
     const xirsysApiKey = process.env.XIRSYS_API_KEY;
     const xirsysApiSecret = process.env.XIRSYS_API_SECRET;
-    const xirsysChannel = process.env.XIRSYS_CHANNEL || 'default';
 
     if (xirsysApiKey && xirsysApiSecret) {
       const host =
@@ -29,7 +31,7 @@ export async function GET(request: NextRequest) {
         'default';
       const application = host.split(',')[0].trim();
 
-      const url = `https://global.xirsys.net/_turn/${encodeURIComponent(xirsysChannel)}`;
+      const url = `https://global.xirsys.net/_turn/${encodeURIComponent(XIRSYS_CHANNEL)}`;
       const body = JSON.stringify({ format: 'urls', application });
       const auth =
         typeof Buffer !== 'undefined'
