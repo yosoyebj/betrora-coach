@@ -1,70 +1,89 @@
 import { NextRequest, NextResponse } from 'next/server';
+
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+export const runtime = 'nodejs';
+
+const FALLBACK_ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+];
 
 /**
  * GET /api/ice-servers
- * Returns ICE server configuration for WebRTC peer connections
- * Falls back to default STUN servers if Xirsys or other service fails
+ * Returns ICE server configuration for WebRTC peer connections.
+ * Uses Xirsys TURN when env vars are set; otherwise returns STUN fallback.
+ * Application is derived from request host (no XIRSYS_APPLICATION env).
  */
 export async function GET(request: NextRequest) {
   try {
-    // Default STUN servers (fallback)
-    const defaultIceServers = [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:global.stun.twilio.com:3478' },
-    ];
-
-    // Try to fetch from Xirsys API if configured
     const xirsysApiKey = process.env.XIRSYS_API_KEY;
     const xirsysApiSecret = process.env.XIRSYS_API_SECRET;
     const xirsysChannel = process.env.XIRSYS_CHANNEL || 'default';
-    const xirsysApplication = process.env.XIRSYS_APPLICATION || 'default';
 
     if (xirsysApiKey && xirsysApiSecret) {
-      try {
-        // Xirsys API endpoint format
-        const xirsysUrl = `https://service.xirsys.com/ice?ident=${encodeURIComponent(xirsysApiKey)}&secret=${encodeURIComponent(xirsysApiSecret)}&domain=${encodeURIComponent(xirsysApplication)}&application=${encodeURIComponent(xirsysChannel)}&room=${encodeURIComponent('session-room')}&secure=1`;
+      const host =
+        request.headers.get('x-forwarded-host') ||
+        request.headers.get('host') ||
+        request.nextUrl?.host ||
+        'default';
+      const application = host.split(',')[0].trim();
 
-        const response = await fetch(xirsysUrl, {
-          method: 'GET',
+      const url = `https://global.xirsys.net/_turn/${encodeURIComponent(xirsysChannel)}`;
+      const body = JSON.stringify({ format: 'urls', application });
+      const auth =
+        typeof Buffer !== 'undefined'
+          ? Buffer.from(`${xirsysApiKey}:${xirsysApiSecret}`).toString('base64')
+          : btoa(`${xirsysApiKey}:${xirsysApiSecret}`);
+
+      try {
+        const response = await fetch(url, {
+          method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
+            Authorization: `Basic ${auth}`,
           },
+          body,
         });
 
-        if (response.ok) {
-          const data = await response.json();
-          
-          // Xirsys returns data in format: { d: { iceServers: [...] } }
-          if (data?.d?.iceServers && Array.isArray(data.d.iceServers)) {
-            return NextResponse.json(
-              { iceServers: data.d.iceServers },
-              { headers: { 'Cache-Control': 'no-store' } }
-            );
-          }
+        if (!response.ok) {
+          console.warn(
+            '[ice-servers] Xirsys non-200, using fallback:',
+            response.status,
+            response.statusText
+          );
+          return NextResponse.json(
+            { iceServers: FALLBACK_ICE_SERVERS },
+            { headers: { 'Cache-Control': 'no-store' } }
+          );
         }
-      } catch (xirsysError) {
-        console.error('Xirsys ICE server fetch failed, using fallback:', xirsysError);
+
+        const data = await response.json();
+        const iceServers =
+          data?.v?.iceServers ?? data?.d?.iceServers ?? data?.iceServers;
+        if (Array.isArray(iceServers) && iceServers.length > 0) {
+          return NextResponse.json(
+            { iceServers },
+            { headers: { 'Cache-Control': 'no-store' } }
+          );
+        }
+
+        console.warn('[ice-servers] Xirsys response missing iceServers, using fallback');
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : 'unknown';
+        console.warn('[ice-servers] Xirsys request failed, using fallback:', reason);
       }
     }
 
-    // Fallback to default STUN servers
     return NextResponse.json(
-      { iceServers: defaultIceServers },
+      { iceServers: FALLBACK_ICE_SERVERS },
       { headers: { 'Cache-Control': 'no-store' } }
     );
-  } catch (error: any) {
-    console.error('Error in ICE servers endpoint:', error);
-    
-    // Return default STUN servers even on error
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'unknown';
+    console.error('[ice-servers] Error:', reason);
     return NextResponse.json(
-      { 
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:global.stun.twilio.com:3478' },
-        ]
-      },
+      { iceServers: FALLBACK_ICE_SERVERS },
       { headers: { 'Cache-Control': 'no-store' } }
     );
   }
