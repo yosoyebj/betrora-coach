@@ -1020,35 +1020,40 @@ export function useWebRTC(
         peerConnectionRef.current?.addTrack(track, stream);
       });
 
-      // If we're the initiator and connection is stable, create a new offer
-      if (peerConnectionRef.current.signalingState === 'stable' && channelRef.current && !offerSentRef.current) {
+      // Always renegotiate after adding local tracks, regardless of initiator.
+      // Otherwise, the remote peer will never receive the new media when the coach
+      // enables camera/mic (especially when the coach is not the initial initiator).
+      if (peerConnectionRef.current.signalingState === 'stable' && channelRef.current && subscribedStatusRef.current === 'SUBSCRIBED') {
         const otherUserId = remoteUserId || remoteUserIdRef.current;
         if (otherUserId && otherUserId !== currentUserId) {
-          // Use string comparison for deterministic initiator selection
-          const isInitiator = currentUserId < otherUserId;
-          
-          if (isInitiator) {
-            console.log('WebRTC: Creating new offer with local media tracks');
-            const offer = await peerConnectionRef.current.createOffer();
-            await peerConnectionRef.current.setLocalDescription(offer);
-            
-            const messageId = crypto.randomUUID();
-            channelRef.current.send({
-              type: 'broadcast',
-              event: 'signal',
-              payload: {
-                id: messageId,
-                type: 'offer',
-                offer: offer,
-                from: currentUserId,
-              },
-            });
-            offerSentRef.current = true;
-            offerSentCountRef.current++;
-            lastSignalSentAtRef.current = Date.now();
-            console.log('WebRTC: SEND offer', { currentUserId, otherUserId, messageId });
-          }
+          console.log('WebRTC: Creating renegotiation offer with local media tracks');
+          const offer = await peerConnectionRef.current.createOffer();
+          await peerConnectionRef.current.setLocalDescription(offer);
+
+          const messageId = crypto.randomUUID();
+          channelRef.current.send({
+            type: 'broadcast',
+            event: 'signal',
+            payload: {
+              id: messageId,
+              type: 'offer',
+              offer: offer,
+              from: currentUserId,
+            },
+          });
+          offerSentRef.current = true;
+          offerSentCountRef.current++;
+          lastSignalSentAtRef.current = Date.now();
+          console.log('WebRTC: SEND offer (renegotiation)', { currentUserId, otherUserId, messageId });
+        } else {
+          console.warn('WebRTC: Cannot renegotiate - missing or invalid otherUserId', { currentUserId, otherUserId });
         }
+      } else {
+        console.warn('WebRTC: Cannot renegotiate - signaling not ready', {
+          signalingState: peerConnectionRef.current.signalingState,
+          hasChannel: !!channelRef.current,
+          status: subscribedStatusRef.current,
+        });
       }
 
       console.log('WebRTC: ✅ Local media enabled successfully');

@@ -109,7 +109,7 @@ await enableLocalMedia();
 This will:
 1. Request user media (`getUserMedia`)
 2. Add tracks to existing peer connection
-3. Create a new offer if coach is the initiator
+3. Create a new offer (renegotiation) so the remote peer receives the new tracks
 4. Transition to full two-way mode
 
 ## File Structure
