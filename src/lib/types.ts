@@ -74,9 +74,7 @@ export type CoachNote = {
   note: string;
   created_at: string;
   updated_at: string;
-};
-
-export type CoachSessionStatus =
+};export type CoachSessionStatus =
   | "scheduled"
   | "rescheduled"
   | "pending_approval"
