@@ -84,67 +84,65 @@ export function useWebRTC(
   const processedMessageIdsRef = useRef<Set<string>>(new Set());
   const answerAppliedRef = useRef(false);
 
-  // Initialize Supabase for signaling with authentication
-  useEffect(() => {
-    const initSupabase = async () => {
-      if (supabaseUrl && supabaseAnonKey) {
-        let client: ReturnType<typeof createClient>;
-        
-        // If we have a session token, use authenticated client (matches @calmoraa pattern)
-        if (sessionToken) {
-          try {
-            // Get fresh token from Supabase client
-            const supabaseBrowser = createSupabaseBrowserClient();
-            const { data: { session } } = await supabaseBrowser.auth.getSession();
-            const token = session?.access_token || sessionToken;
-            
-            if (token) {
-              client = createClient(supabaseUrl, supabaseAnonKey, {
-                global: {
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                  },
-                },
-              });
-              console.log('WebRTC: Initialized authenticated Supabase client for signaling');
-            } else {
-              client = createClient(supabaseUrl, supabaseAnonKey);
-              console.warn('WebRTC: No token available, using unauthenticated client');
-            }
-          } catch (error) {
-            console.error('Error getting session token, using unauthenticated client:', error);
-            client = createClient(supabaseUrl, supabaseAnonKey);
-          }
+  const ensureSupabaseClient = useCallback(async () => {
+    if (supabaseRef.current) return supabaseRef.current;
+    if (!supabaseUrl || !supabaseAnonKey) return null;
+
+    let client: ReturnType<typeof createClient>;
+    if (sessionToken) {
+      try {
+        const supabaseBrowser = createSupabaseBrowserClient();
+        const { data: { session } } = await supabaseBrowser.auth.getSession();
+        const token = session?.access_token || sessionToken;
+
+        if (token) {
+          client = createClient(supabaseUrl, supabaseAnonKey, {
+            global: {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          });
+          console.log('WebRTC: Initialized authenticated Supabase client for signaling');
         } else {
-          // Fallback: try to get session from browser client
-          try {
-            const supabaseBrowser = createSupabaseBrowserClient();
-            const { data: { session } } = await supabaseBrowser.auth.getSession();
-            if (session?.access_token) {
-              client = createClient(supabaseUrl, supabaseAnonKey, {
-                global: {
-                  headers: {
-                    Authorization: `Bearer ${session.access_token}`,
-                  },
-                },
-              });
-              console.log('WebRTC: Initialized authenticated Supabase client from browser session');
-            } else {
-              client = createClient(supabaseUrl, supabaseAnonKey);
-              console.warn('WebRTC: No session found, using unauthenticated client');
-            }
-          } catch (error) {
-            console.error('Error getting browser session, using unauthenticated client:', error);
-            client = createClient(supabaseUrl, supabaseAnonKey);
-          }
+          client = createClient(supabaseUrl, supabaseAnonKey);
+          console.warn('WebRTC: No token available, using unauthenticated client');
         }
-        
-        supabaseRef.current = client;
+      } catch (error) {
+        console.error('Error getting session token, using unauthenticated client:', error);
+        client = createClient(supabaseUrl, supabaseAnonKey);
       }
-    };
-    
-    initSupabase();
+    } else {
+      try {
+        const supabaseBrowser = createSupabaseBrowserClient();
+        const { data: { session } } = await supabaseBrowser.auth.getSession();
+        if (session?.access_token) {
+          client = createClient(supabaseUrl, supabaseAnonKey, {
+            global: {
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+            },
+          });
+          console.log('WebRTC: Initialized authenticated Supabase client from browser session');
+        } else {
+          client = createClient(supabaseUrl, supabaseAnonKey);
+          console.warn('WebRTC: No session found, using unauthenticated client');
+        }
+      } catch (error) {
+        console.error('Error getting browser session, using unauthenticated client:', error);
+        client = createClient(supabaseUrl, supabaseAnonKey);
+      }
+    }
+
+    supabaseRef.current = client;
+    return client;
   }, [sessionToken]);
+
+  // Initialize Supabase client early, but setup also hard-requires it via ensureSupabaseClient().
+  useEffect(() => {
+    void ensureSupabaseClient();
+  }, [ensureSupabaseClient]);
 
   const fetchIceServers = async () => {
     try {
@@ -246,7 +244,7 @@ export function useWebRTC(
           try {
             const messageId = crypto.randomUUID();
             // Send ICE candidate via Supabase Realtime broadcast
-            channelRef.current.send({
+            void channelRef.current.send({
               type: 'broadcast',
               event: 'signal',
               payload: {
@@ -256,9 +254,16 @@ export function useWebRTC(
                 from: currentUserId,
                 to: otherUserId,
               },
+            }).then((sendResult: string) => {
+              if (sendResult === 'ok') {
+                iceSentCountRef.current++;
+                console.log('WebRTC: ICE sent count', iceSentCountRef.current);
+              } else {
+                console.warn('WebRTC: ICE candidate send returned non-ok status', { sendResult, messageId });
+              }
+            }).catch((sendError: unknown) => {
+              console.error('WebRTC: Error sending ICE candidate', sendError);
             });
-            iceSentCountRef.current++;
-            console.log('WebRTC: ICE sent count', iceSentCountRef.current);
           } catch (error) {
             console.error('WebRTC: Error sending ICE candidate', error);
           }
@@ -388,28 +393,32 @@ export function useWebRTC(
       // is exchanged via Supabase Realtime broadcast channels.
       // The data channel is NOT used for signaling - only for chat messages.
       // Set up signaling via Supabase Realtime
-      if (supabaseRef.current) {
-        // Guard against duplicate channel creation
-        if (channelRef.current) {
-          console.log('WebRTC: Channel already exists, skipping creation', {
-            sessionId,
-            channelName: `room:${sessionId}`,
-            timestamp: Date.now(),
-          });
-          return pc;
-        }
+      const supabaseClient = await ensureSupabaseClient();
+      if (!supabaseClient) {
+        throw new Error('WebRTC: Supabase client is not configured for signaling');
+      }
 
-        const channel = supabaseRef.current.channel(`room:${sessionId}`, {
-          config: {
-            broadcast: { self: false },
-          },
-        });
-        channelRef.current = channel;
-        console.log('WebRTC: Channel created', {
+      // Guard against duplicate channel creation
+      if (channelRef.current) {
+        console.log('WebRTC: Channel already exists, skipping creation', {
           sessionId,
           channelName: `room:${sessionId}`,
           timestamp: Date.now(),
         });
+        return pc;
+      }
+
+      const channel = supabaseClient.channel(`room:${sessionId}`, {
+        config: {
+          broadcast: { self: false },
+        },
+      });
+      channelRef.current = channel;
+      console.log('WebRTC: Channel created', {
+        sessionId,
+        channelName: `room:${sessionId}`,
+        timestamp: Date.now(),
+      });
 
         // Helper function to attempt offer creation
         const attemptOfferCreation = async (otherUserId: string, isInitiator?: boolean) => {
@@ -447,7 +456,7 @@ export function useWebRTC(
               }
               try {
                 const messageId = crypto.randomUUID();
-                const sendResult = channel.send({
+                const sendResult = await channel.send({
                   type: 'broadcast',
                   event: 'signal',
                   payload: {
@@ -455,8 +464,12 @@ export function useWebRTC(
                     type: 'offer',
                     offer: offer,
                     from: currentUserId,
+                    to: otherUserId,
                   },
                 });
+                if (sendResult !== 'ok') {
+                  throw new Error(`Offer send failed with status: ${sendResult}`);
+                }
                 offerSentRef.current = true;
                 offerSentCountRef.current++;
                 lastSignalSentAtRef.current = Date.now();
@@ -481,7 +494,7 @@ export function useWebRTC(
         };
 
         channel
-          .on('broadcast', { event: 'signal' }, (payload: { payload?: { from?: string; id?: string; type?: string; offer?: RTCSessionDescriptionInit; answer?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit } }) => {
+          .on('broadcast', { event: 'signal' }, (payload: { payload?: { from?: string; to?: string; id?: string; type?: string; offer?: RTCSessionDescriptionInit; answer?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit } }) => {
             // Raw event logging to verify payload structure (log once per event type)
             try {
               const safePayload = {
@@ -494,8 +507,10 @@ export function useWebRTC(
               console.log('RAW SIGNAL EVENT (stringified):', payload);
             }
             
-            const { from, id: messageId, ...data } = payload.payload || {};
+            const { from, to, id: messageId, ...data } = payload.payload || {};
+            if (!from) return;
             if (from === currentUserId) return; // Ignore own signals
+            if (to && to !== currentUserId) return; // Ignore signals addressed to someone else
 
             // Deduplicate messages by ID
             if (messageId) {
@@ -540,6 +555,31 @@ export function useWebRTC(
                     hasReceivedOffer: hasReceivedOfferRef.current,
                   });
                   attemptOfferCreation(from, true);
+                } else if (
+                  isInitiator &&
+                  pc?.signalingState === 'have-local-offer' &&
+                  offerSentRef.current &&
+                  answerRecvCountRef.current === 0
+                ) {
+                  const offerAgeMs = lastSignalSentAtRef.current ? Date.now() - lastSignalSentAtRef.current : null;
+                  if (offerAgeMs === null || offerAgeMs > 3000) {
+                    console.warn('WebRTC: Late join detected while waiting for answer, rolling back and re-offering', {
+                      offerAgeMs,
+                      currentUserId,
+                      otherUserId: from,
+                    });
+                    void (async () => {
+                      try {
+                        await pc.setLocalDescription({ type: 'rollback' });
+                        offerSentRef.current = false;
+                        answerAppliedRef.current = false;
+                        hasReceivedOfferRef.current = false;
+                        attemptOfferCreation(from, true);
+                      } catch (rollbackError) {
+                        console.error('WebRTC: Failed to rollback local offer on late-join recovery', rollbackError);
+                      }
+                    })();
+                  }
                 } else {
                   console.log('WebRTC: Cannot create offer from join handler', {
                     isInitiator,
@@ -552,10 +592,9 @@ export function useWebRTC(
               }
             } else if (data.type === 'offer') {
               offerRecvCountRef.current++;
-              hasReceivedOfferRef.current = true;
               console.log('WebRTC: RECV offer', { from, currentUserId });
               if (data.offer) {
-                handleOffer(data.offer, pc, messageId);
+                handleOffer(data.offer, pc, from, messageId);
               }
             } else if (data.type === 'answer') {
               answerRecvCountRef.current++;
@@ -581,18 +620,28 @@ export function useWebRTC(
               // Send join signal immediately to break deadlock
               if (!joinSentRef.current && channelRef.current && subscribedStatusRef.current === 'SUBSCRIBED') {
                 try {
-                  channelRef.current.send({
+                  const messageId = crypto.randomUUID();
+                  void channelRef.current.send({
                     type: 'broadcast',
                     event: 'signal',
                     payload: {
+                      id: messageId,
                       type: 'join',
                       from: currentUserId,
+                      to: remoteUserId || null,
                       ts: Date.now(),
                     },
+                  }).then((sendResult: string) => {
+                    if (sendResult === 'ok') {
+                      joinSentRef.current = true;
+                      lastSignalSentAtRef.current = Date.now();
+                      console.log('WebRTC: SEND join', { currentUserId, messageId });
+                    } else {
+                      console.warn('WebRTC: Join send returned non-ok status', { sendResult, messageId });
+                    }
+                  }).catch((sendError: unknown) => {
+                    console.error('WebRTC: Error sending join signal', sendError);
                   });
-                  joinSentRef.current = true;
-                  lastSignalSentAtRef.current = Date.now();
-                  console.log('WebRTC: SEND join', { currentUserId });
                 } catch (error) {
                   console.error('WebRTC: Error sending join signal', error);
                 }
@@ -659,7 +708,6 @@ export function useWebRTC(
               }, 1000);
             }
           });
-      }
 
       return pc;
     } catch (error: any) {
@@ -667,9 +715,14 @@ export function useWebRTC(
       setConnectionState('failed');
       throw error;
     }
-  }, [sessionId, currentUserId, isViewerMode]);
+  }, [sessionId, currentUserId, isViewerMode, remoteUserId, ensureSupabaseClient]);
 
-  const handleOffer = async (offer: RTCSessionDescriptionInit, pc: RTCPeerConnection, messageId?: string) => {
+  const handleOffer = async (
+    offer: RTCSessionDescriptionInit,
+    pc: RTCPeerConnection,
+    fromUserId: string,
+    messageId?: string
+  ) => {
     try {
       // Guard: Only process offer if we're in stable state (not already in negotiation)
       if (pc.signalingState !== 'stable') {
@@ -687,9 +740,9 @@ export function useWebRTC(
         sdpLength: offer.sdp?.length,
         messageId,
       });
-      hasReceivedOfferRef.current = true;
       answerAppliedRef.current = false; // Reset answer flag for new negotiation
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      hasReceivedOfferRef.current = true;
       
       // Flush queued ICE candidates
       if (iceCandidateQueueRef.current && iceCandidateQueueRef.current.length > 0) {
@@ -710,7 +763,8 @@ export function useWebRTC(
       if (channelRef.current && subscribedStatusRef.current === 'SUBSCRIBED') {
         try {
           const messageId = crypto.randomUUID();
-          channelRef.current.send({
+          const targetUserId = remoteUserIdRef.current || remoteUserId || fromUserId;
+          const sendResult = await channelRef.current.send({
             type: 'broadcast',
             event: 'signal',
             payload: {
@@ -718,8 +772,12 @@ export function useWebRTC(
               type: 'answer',
               answer: answer,
               from: currentUserId,
+              to: targetUserId,
             },
           });
+          if (sendResult !== 'ok') {
+            throw new Error(`Answer send failed with status: ${sendResult}`);
+          }
           answerSentCountRef.current++;
           lastSignalSentAtRef.current = Date.now();
           console.log('WebRTC: SEND answer', { currentUserId, messageId });
@@ -1031,7 +1089,7 @@ export function useWebRTC(
           await peerConnectionRef.current.setLocalDescription(offer);
 
           const messageId = crypto.randomUUID();
-          channelRef.current.send({
+          const sendResult = await channelRef.current.send({
             type: 'broadcast',
             event: 'signal',
             payload: {
@@ -1039,12 +1097,16 @@ export function useWebRTC(
               type: 'offer',
               offer: offer,
               from: currentUserId,
+              to: otherUserId,
             },
           });
+          if (sendResult !== 'ok') {
+            throw new Error(`Renegotiation offer send failed with status: ${sendResult}`);
+          }
           offerSentRef.current = true;
           offerSentCountRef.current++;
           lastSignalSentAtRef.current = Date.now();
-          console.log('WebRTC: SEND offer (renegotiation)', { currentUserId, otherUserId, messageId });
+          console.log('WebRTC: SEND offer (renegotiation)', { currentUserId, otherUserId, messageId, sendResult });
         } else {
           console.warn('WebRTC: Cannot renegotiate - missing or invalid otherUserId', { currentUserId, otherUserId });
         }
