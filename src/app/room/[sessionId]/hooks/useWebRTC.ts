@@ -58,6 +58,7 @@ export function useWebRTC(
   const [isRemoteAudioMuted, setIsRemoteAudioMuted] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isViewerMode, setIsViewerMode] = useState(viewerMode);
+  const initialViewerModeRef = useRef(viewerMode);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
@@ -197,12 +198,12 @@ export function useWebRTC(
       console.log('WebRTC: Peer connection created', {
         sessionId,
         currentUserId,
-        viewerMode: isViewerMode,
+        viewerMode: initialViewerModeRef.current,
         iceServersCount: iceServers.length,
       });
 
       // Get user media only if not in viewer mode (coach can enable later)
-      if (!isViewerMode) {
+      if (!initialViewerModeRef.current) {
         let stream: MediaStream;
         try {
           stream = await navigator.mediaDevices.getUserMedia({
@@ -744,7 +745,7 @@ export function useWebRTC(
       setConnectionState('failed');
       throw error;
     }
-  }, [sessionId, currentUserId, isViewerMode, remoteUserId, ensureSupabaseClient]);
+  }, [sessionId, currentUserId, remoteUserId, ensureSupabaseClient]);
 
   const handleOffer = async (
     offer: RTCSessionDescriptionInit,
@@ -1025,7 +1026,7 @@ export function useWebRTC(
       setRemoteStream(null);
       setIsMicOn(false);
       setIsCameraOn(false);
-      setIsViewerMode(viewerMode);
+      setIsViewerMode(initialViewerModeRef.current);
       joinSentRef.current = false;
       offerSentRef.current = false;
       hasReceivedOfferRef.current = false;
@@ -1037,7 +1038,7 @@ export function useWebRTC(
       subscribedStatusRef.current = null;
       remoteUserIdRef.current = null;
     };
-  }, [sessionId, currentUserId, setupPeerConnection, viewerMode]);
+  }, [sessionId, currentUserId, setupPeerConnection]);
 
   const toggleMic = useCallback(() => {
     if (localStreamRef.current) {
@@ -1231,11 +1232,11 @@ export function useWebRTC(
     processedMessageIdsRef.current.clear();
     setIsMicOn(false);
     setIsCameraOn(false);
-    setIsViewerMode(viewerMode);
+    setIsViewerMode(initialViewerModeRef.current);
     setConnectionState('disconnected');
     setLocalStream(null);
     setRemoteStream(null);
-  }, [viewerMode]);
+  }, []);
 
   const retry = useCallback(() => {
     endCall();

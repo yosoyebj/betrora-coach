@@ -173,7 +173,7 @@ export default function RoomLayout({ session, currentUserId }: RoomLayoutProps) 
     currentUserId,
     authSession?.access_token || null,
     otherUserId,
-    true // viewerMode: true by default (coach can enable later)
+    false // coach starts with live media by default
   );
 
   const handleEndCall = () => {
