@@ -83,6 +83,9 @@ export function useWebRTC(
   const cleanupRunCountRef = useRef(0);
   const processedMessageIdsRef = useRef<Set<string>>(new Set());
   const answerAppliedRef = useRef(false);
+  const makingOfferRef = useRef(false);
+  const ignoreOfferRef = useRef(false);
+  const setupGenerationRef = useRef(0);
 
   const ensureSupabaseClient = useCallback(async () => {
     if (supabaseRef.current) return supabaseRef.current;
@@ -149,7 +152,15 @@ export function useWebRTC(
       const res = await fetch('/api/ice-servers');
       if (res.ok) {
         const data = await res.json();
-        return data.iceServers || [];
+        const iceServers = data.iceServers || [];
+        const hasTurn = iceServers.some((server: { urls?: string | string[] }) => {
+          const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
+          return urls.some((url) => typeof url === 'string' && url.startsWith('turn:'));
+        });
+        if (!hasTurn) {
+          console.warn('WebRTC: TURN not available, using STUN-only ICE servers (connectivity may be limited)');
+        }
+        return iceServers;
       }
     } catch (error) {
       console.error('Failed to fetch ICE servers:', error);
@@ -163,10 +174,16 @@ export function useWebRTC(
   };
 
   const setupPeerConnection = useCallback(async () => {
+    const setupGeneration = ++setupGenerationRef.current;
+    const isStaleSetup = () => setupGeneration !== setupGenerationRef.current;
     try {
       // Prevent double init in React StrictMode
       if (peerConnectionRef.current) {
-        return peerConnectionRef.current;
+        if (peerConnectionRef.current.connectionState === 'closed') {
+          peerConnectionRef.current = null;
+        } else {
+          return peerConnectionRef.current;
+        }
       }
       setConnectionState('connecting');
 
@@ -422,6 +439,7 @@ export function useWebRTC(
 
         // Helper function to attempt offer creation
         const attemptOfferCreation = async (otherUserId: string, isInitiator?: boolean) => {
+          if (isStaleSetup()) return;
           // Re-check if we should be initiator (in case otherUserId was discovered)
           if (isInitiator === undefined) {
             if (otherUserId === currentUserId) {
@@ -438,22 +456,22 @@ export function useWebRTC(
           // 3. We haven't received an offer yet
           // 4. We haven't already sent an offer
           if (isInitiator && pc.signalingState === 'stable' && !hasReceivedOfferRef.current && !offerSentRef.current) {
+            if (subscribedStatusRef.current !== 'SUBSCRIBED') {
+              console.warn('WebRTC: Cannot send offer - channel not subscribed', {
+                status: subscribedStatusRef.current,
+                currentUserId,
+                otherUserId,
+              });
+              return;
+            }
             try {
+              makingOfferRef.current = true;
               console.log('WebRTC: Creating offer as initiator', {
                 currentUserId,
                 otherUserId,
               });
               const offer = await pc.createOffer();
               await pc.setLocalDescription(offer);
-              
-              if (subscribedStatusRef.current !== 'SUBSCRIBED') {
-                console.warn('WebRTC: Cannot send offer - channel not subscribed', {
-                  status: subscribedStatusRef.current,
-                  currentUserId,
-                  otherUserId,
-                });
-                return;
-              }
               try {
                 const messageId = crypto.randomUUID();
                 const sendResult = await channel.send({
@@ -477,9 +495,20 @@ export function useWebRTC(
               } catch (sendError) {
                 console.error('WebRTC: Error sending offer', sendError);
                 offerSentRef.current = false; // Allow retry
+                const activePc = peerConnectionRef.current;
+                if (activePc && activePc.signalingState === 'have-local-offer') {
+                  try {
+                    await activePc.setLocalDescription({ type: 'rollback' });
+                    console.log('WebRTC: Rolled back local offer after send failure');
+                  } catch (rollbackError) {
+                    console.error('WebRTC: Failed to rollback local offer', rollbackError);
+                  }
+                }
               }
             } catch (error) {
               console.error('Error creating offer:', error);
+            } finally {
+              makingOfferRef.current = false;
             }
           } else {
             console.log('WebRTC: Waiting for offer', {
@@ -724,15 +753,23 @@ export function useWebRTC(
     messageId?: string
   ) => {
     try {
-      // Guard: Only process offer if we're in stable state (not already in negotiation)
-      if (pc.signalingState !== 'stable') {
-        console.warn('WebRTC: Ignoring offer - wrong signaling state', {
+      const isPolitePeer = currentUserId > fromUserId;
+      const offerCollision = makingOfferRef.current || pc.signalingState !== 'stable';
+      ignoreOfferRef.current = !isPolitePeer && offerCollision;
+
+      if (ignoreOfferRef.current) {
+        console.warn('WebRTC: Ignoring colliding offer as impolite peer', {
           currentState: pc.signalingState,
-          expectedState: 'stable',
           messageId,
-          hasReceivedOffer: hasReceivedOfferRef.current,
+          fromUserId,
+          makingOffer: makingOfferRef.current,
         });
         return;
+      }
+
+      if (offerCollision && pc.signalingState === 'have-local-offer') {
+        await pc.setLocalDescription({ type: 'rollback' });
+        offerSentRef.current = false;
       }
 
       console.log('WebRTC: 📥 Received offer, creating answer', {
@@ -945,6 +982,7 @@ export function useWebRTC(
     });
 
     return () => {
+      setupGenerationRef.current++;
       cleanupRunCountRef.current++;
       const cleanupRunNumber = cleanupRunCountRef.current;
       console.log('WebRTC: Cleanup running', {
@@ -966,10 +1004,12 @@ export function useWebRTC(
         } catch (error) {
           console.error('Error closing data channel:', error);
         }
+        dataChannelRef.current = null;
       }
       // Close peer connection
       if (peerConnectionRef.current) {
         peerConnectionRef.current.close();
+        peerConnectionRef.current = null;
       }
       // Unsubscribe from Supabase Realtime channel
       if (channelRef.current) {
@@ -980,8 +1020,24 @@ export function useWebRTC(
         channelRef.current.unsubscribe();
         channelRef.current = null; // Clear ref after unsubscribe
       }
+      localStreamRef.current = null;
+      setLocalStream(null);
+      setRemoteStream(null);
+      setIsMicOn(false);
+      setIsCameraOn(false);
+      setIsViewerMode(viewerMode);
+      joinSentRef.current = false;
+      offerSentRef.current = false;
+      hasReceivedOfferRef.current = false;
+      answerAppliedRef.current = false;
+      makingOfferRef.current = false;
+      ignoreOfferRef.current = false;
+      iceCandidateQueueRef.current = [];
+      processedMessageIdsRef.current.clear();
+      subscribedStatusRef.current = null;
+      remoteUserIdRef.current = null;
     };
-  }, [sessionId, currentUserId]); // Direct dependencies instead of setupPeerConnection
+  }, [sessionId, currentUserId, setupPeerConnection, viewerMode]);
 
   const toggleMic = useCallback(() => {
     if (localStreamRef.current) {
@@ -993,6 +1049,7 @@ export function useWebRTC(
       console.log('WebRTC: Microphone toggled', { enabled: !isMicOn });
     } else {
       console.warn('WebRTC: Cannot toggle mic - no local stream (viewer mode?)');
+      setIsMicOn(false);
     }
   }, [isMicOn]);
 
@@ -1006,6 +1063,7 @@ export function useWebRTC(
       console.log('WebRTC: Camera toggled', { enabled: !isCameraOn });
     } else {
       console.warn('WebRTC: Cannot toggle camera - no local stream (viewer mode?)');
+      setIsCameraOn(false);
     }
   }, [isCameraOn]);
 
@@ -1019,7 +1077,7 @@ export function useWebRTC(
       const newMutedState = !isRemoteAudioMuted;
       
       audioTracks.forEach((track) => {
-        track.enabled = newMutedState;
+        track.enabled = !newMutedState;
       });
       
       setIsRemoteAudioMuted(newMutedState);
@@ -1123,7 +1181,7 @@ export function useWebRTC(
       console.error('WebRTC: ❌ Error enabling local media:', error);
       setConnectionState('failed');
     }
-  }, [currentUserId, remoteUserId, isRemoteAudioMuted]);
+  }, [currentUserId, remoteUserId]);
 
   // Sync mute state when remote stream changes
   useEffect(() => {
@@ -1136,6 +1194,7 @@ export function useWebRTC(
   }, [remoteStream, isRemoteAudioMuted]);
 
   const endCall = useCallback(() => {
+    setupGenerationRef.current++;
     // Complete cleanup: Stop all media tracks first
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -1147,19 +1206,36 @@ export function useWebRTC(
       } catch (error) {
         console.error('Error closing data channel:', error);
       }
+      dataChannelRef.current = null;
     }
     // Close peer connection
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
     }
     // Unsubscribe from Supabase Realtime channel
     if (channelRef.current) {
       channelRef.current.unsubscribe();
+      channelRef.current = null;
     }
+    localStreamRef.current = null;
+    remoteUserIdRef.current = null;
+    joinSentRef.current = false;
+    offerSentRef.current = false;
+    hasReceivedOfferRef.current = false;
+    answerAppliedRef.current = false;
+    makingOfferRef.current = false;
+    ignoreOfferRef.current = false;
+    iceCandidateQueueRef.current = [];
+    subscribedStatusRef.current = null;
+    processedMessageIdsRef.current.clear();
+    setIsMicOn(false);
+    setIsCameraOn(false);
+    setIsViewerMode(viewerMode);
     setConnectionState('disconnected');
     setLocalStream(null);
     setRemoteStream(null);
-  }, []);
+  }, [viewerMode]);
 
   const retry = useCallback(() => {
     endCall();
@@ -1169,6 +1245,8 @@ export function useWebRTC(
     joinSentRef.current = false;
     offerSentRef.current = false;
     answerAppliedRef.current = false;
+    makingOfferRef.current = false;
+    ignoreOfferRef.current = false;
     iceCandidateQueueRef.current = [];
     iceSentCountRef.current = 0;
     iceRecvCountRef.current = 0;

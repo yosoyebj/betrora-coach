@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
             response.statusText
           );
           return NextResponse.json(
-            { iceServers: FALLBACK_ICE_SERVERS },
+            { iceServers: FALLBACK_ICE_SERVERS, mode: 'stun-fallback' },
             { headers: { 'Cache-Control': 'no-store' } }
           );
         }
@@ -64,8 +64,15 @@ export async function GET(request: NextRequest) {
         const iceServers =
           data?.v?.iceServers ?? data?.d?.iceServers ?? data?.iceServers;
         if (Array.isArray(iceServers) && iceServers.length > 0) {
+          const hasTurn = iceServers.some((server: { urls?: string | string[] }) => {
+            const urls = Array.isArray(server?.urls) ? server.urls : [server?.urls];
+            return urls.some((value) => typeof value === 'string' && value.startsWith('turn:'));
+          });
+          if (!hasTurn) {
+            console.warn('[ice-servers] Xirsys returned no TURN servers, STUN-only connectivity');
+          }
           return NextResponse.json(
-            { iceServers },
+            { iceServers, mode: hasTurn ? 'turn' : 'stun-fallback' },
             { headers: { 'Cache-Control': 'no-store' } }
           );
         }
@@ -78,14 +85,14 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { iceServers: FALLBACK_ICE_SERVERS },
+      { iceServers: FALLBACK_ICE_SERVERS, mode: 'stun-fallback' },
       { headers: { 'Cache-Control': 'no-store' } }
     );
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'unknown';
     console.error('[ice-servers] Error:', reason);
     return NextResponse.json(
-      { iceServers: FALLBACK_ICE_SERVERS },
+      { iceServers: FALLBACK_ICE_SERVERS, mode: 'stun-fallback' },
       { headers: { 'Cache-Control': 'no-store' } }
     );
   }
