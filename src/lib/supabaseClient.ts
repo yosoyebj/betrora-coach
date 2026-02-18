@@ -1,6 +1,9 @@
 import { createBrowserClient } from "@supabase/ssr";
 
-let supabaseClient: ReturnType<typeof createBrowserClient> | null = null;
+type SupabaseBrowserClient = ReturnType<typeof createBrowserClient>;
+type SupabaseGlobal = typeof globalThis & {
+  __betroraCoachSupabaseClient?: SupabaseBrowserClient;
+};
 
 export function createSupabaseBrowserClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -10,11 +13,12 @@ export function createSupabaseBrowserClient() {
     throw new Error("Missing Supabase env vars. Please check your .env.local file.");
   }
 
-  // Reuse client instance if it exists
-  if (!supabaseClient) {
-    supabaseClient = createBrowserClient(supabaseUrl, supabaseAnonKey);
+  const globalScope = globalThis as SupabaseGlobal;
+
+  // Reuse a single browser client across module reloads and import variants.
+  if (!globalScope.__betroraCoachSupabaseClient) {
+    globalScope.__betroraCoachSupabaseClient = createBrowserClient(supabaseUrl, supabaseAnonKey);
   }
 
-  return supabaseClient;
+  return globalScope.__betroraCoachSupabaseClient;
 }
-

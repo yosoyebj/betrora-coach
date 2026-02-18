@@ -2,10 +2,36 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const SIGNAL_TYPES = new Set(['join', 'offer', 'answer', 'ice-candidate']);
+
+const toErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error ?? 'unknown'));
+
+const isAuthBootstrapError = (error: unknown) =>
+  /(^|\s)(401|403)(\s|$)|Unauthorized|Forbidden|Missing auth token|Authorization header required/i.test(
+    toErrorMessage(error)
+  );
+
+const createSignalingClient = (accessToken?: string | null): ReturnType<typeof createClient> =>
+  createClient(supabaseUrl, supabaseAnonKey, {
+    global: accessToken
+      ? {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      : undefined,
+    auth: {
+      // Keep signaling clients isolated from shared browser auth storage.
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  }) as ReturnType<typeof createClient>;
 
 export type ConnectionState = 'connecting' | 'connected' | 'failed' | 'disconnected';
 
@@ -87,6 +113,16 @@ export function useWebRTC(
   const makingOfferRef = useRef(false);
   const ignoreOfferRef = useRef(false);
   const setupGenerationRef = useRef(0);
+  const signalingChannelNameRef = useRef<string | null>(null);
+  const isRestartingIceRef = useRef(false);
+  const lastIceRestartAtRef = useRef<number | null>(null);
+  const signalingModeRef = useRef<'validated' | 'legacy-fallback'>('validated');
+  const negotiationBlockedRef = useRef(false);
+  const failureReasonRef = useRef<string | null>(null);
+  const isRejoiningChannelRef = useRef(false);
+  const signalBroadcastHandlerRef = useRef<((payload: any) => void) | null>(null);
+  const channelStatusHandlerRef = useRef<((status: string) => void) | null>(null);
+  const lastRejoinAccessTokenRef = useRef<string | null>(null);
 
   const ensureSupabaseClient = useCallback(async () => {
     if (supabaseRef.current) return supabaseRef.current;
@@ -100,42 +136,30 @@ export function useWebRTC(
         const token = session?.access_token || sessionToken;
 
         if (token) {
-          client = createClient(supabaseUrl, supabaseAnonKey, {
-            global: {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            },
-          });
+          client = createSignalingClient(token);
           console.log('WebRTC: Initialized authenticated Supabase client for signaling');
         } else {
-          client = createClient(supabaseUrl, supabaseAnonKey);
+          client = createSignalingClient();
           console.warn('WebRTC: No token available, using unauthenticated client');
         }
       } catch (error) {
         console.error('Error getting session token, using unauthenticated client:', error);
-        client = createClient(supabaseUrl, supabaseAnonKey);
+        client = createSignalingClient();
       }
     } else {
       try {
         const supabaseBrowser = createSupabaseBrowserClient();
         const { data: { session } } = await supabaseBrowser.auth.getSession();
         if (session?.access_token) {
-          client = createClient(supabaseUrl, supabaseAnonKey, {
-            global: {
-              headers: {
-                Authorization: `Bearer ${session.access_token}`,
-              },
-            },
-          });
+          client = createSignalingClient(session.access_token);
           console.log('WebRTC: Initialized authenticated Supabase client from browser session');
         } else {
-          client = createClient(supabaseUrl, supabaseAnonKey);
+          client = createSignalingClient();
           console.warn('WebRTC: No session found, using unauthenticated client');
         }
       } catch (error) {
         console.error('Error getting browser session, using unauthenticated client:', error);
-        client = createClient(supabaseUrl, supabaseAnonKey);
+        client = createSignalingClient();
       }
     }
 
@@ -147,6 +171,43 @@ export function useWebRTC(
   useEffect(() => {
     void ensureSupabaseClient();
   }, [ensureSupabaseClient]);
+
+  const fetchAuthToken = useCallback(async () => {
+    if (sessionToken) {
+      return sessionToken;
+    }
+    try {
+      const supabaseBrowser = createSupabaseBrowserClient();
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      return session?.access_token || null;
+    } catch (error) {
+      console.error('Failed to resolve auth token for RTC channel:', error);
+      return null;
+    }
+  }, [sessionToken]);
+
+  const fetchSignalingChannelName = useCallback(async () => {
+    const token = await fetchAuthToken();
+    if (!token) {
+      throw new Error('Missing auth token for signaling channel validation');
+    }
+
+    const res = await fetch(`/api/rtc-channel?sessionId=${encodeURIComponent(sessionId)}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Failed to fetch signaling channel: ${res.status} ${body}`);
+    }
+    const data = await res.json();
+    if (!data?.channelName || typeof data.channelName !== 'string') {
+      throw new Error('Invalid signaling channel response');
+    }
+    return data.channelName as string;
+  }, [fetchAuthToken, sessionId]);
 
   const fetchIceServers = async () => {
     try {
@@ -173,6 +234,12 @@ export function useWebRTC(
       { urls: 'stun:global.stun.twilio.com:3478' },
     ];
   };
+
+  useEffect(() => {
+    if (remoteUserId && remoteUserId !== currentUserId) {
+      remoteUserIdRef.current = remoteUserId;
+    }
+  }, [remoteUserId, currentUserId]);
 
   const setupPeerConnection = useCallback(async () => {
     const setupGeneration = ++setupGenerationRef.current;
@@ -234,6 +301,15 @@ export function useWebRTC(
         });
       } else {
         console.log('WebRTC: Viewer mode - not requesting local media (coach will only receive)');
+        const hasAudioRecv = pc
+          .getTransceivers()
+          .some((t) => t.receiver?.track?.kind === 'audio' || t.sender?.track?.kind === 'audio');
+        const hasVideoRecv = pc
+          .getTransceivers()
+          .some((t) => t.receiver?.track?.kind === 'video' || t.sender?.track?.kind === 'video');
+        if (!hasAudioRecv) pc.addTransceiver('audio', { direction: 'recvonly' });
+        if (!hasVideoRecv) pc.addTransceiver('video', { direction: 'recvonly' });
+        console.log('rtc_audit.viewer_recvonly_transceivers', { sessionId, hasAudioRecv, hasVideoRecv });
       }
 
       // Handle remote stream
@@ -257,6 +333,7 @@ export function useWebRTC(
 
       // Handle ICE candidates - sent via Supabase Realtime (NOT data channel)
       pc.onicecandidate = (event) => {
+        if (negotiationBlockedRef.current) return;
         if (event.candidate && channelRef.current && subscribedStatusRef.current === 'SUBSCRIBED') {
           const otherUserId = remoteUserIdRef.current || remoteUserId || null;
           try {
@@ -315,10 +392,80 @@ export function useWebRTC(
 
       // Log ICE connection state changes
       pc.oniceconnectionstatechange = () => {
+        const iceState = pc.iceConnectionState;
         console.log('WebRTC: ICE connection state changed', {
-          iceConnectionState: pc.iceConnectionState,
+          iceConnectionState: iceState,
           connectionState: pc.connectionState,
         });
+
+        if ((iceState === 'failed' || iceState === 'disconnected') && !isRestartingIceRef.current && !negotiationBlockedRef.current) {
+          const lastRestartAgo = lastIceRestartAtRef.current ? Date.now() - lastIceRestartAtRef.current : null;
+          if (lastRestartAgo !== null && lastRestartAgo < 8000) {
+            return;
+          }
+          const otherUserId = remoteUserIdRef.current;
+          if (!otherUserId || otherUserId === currentUserId) {
+            return;
+          }
+          if (!channelRef.current || subscribedStatusRef.current !== 'SUBSCRIBED') {
+            return;
+          }
+          if (pc.signalingState !== 'stable') {
+            return;
+          }
+
+          console.log('rtc_audit.ice_recovery_trigger', {
+            sessionId,
+            currentUserId,
+            otherUserId,
+            iceState,
+            signalingState: pc.signalingState,
+          });
+          isRestartingIceRef.current = true;
+          void (async () => {
+            makingOfferRef.current = true;
+            try {
+              if (pc.signalingState !== 'stable') return;
+              const restartOffer = await pc.createOffer({ iceRestart: true });
+              await pc.setLocalDescription(restartOffer);
+              const messageId = crypto.randomUUID();
+              const sendResult = await channelRef.current.send({
+                type: 'broadcast',
+                event: 'signal',
+                payload: {
+                  id: messageId,
+                  type: 'offer',
+                  offer: restartOffer,
+                  from: currentUserId,
+                  to: otherUserId,
+                  restartIce: true,
+                },
+              });
+              if (sendResult === 'ok') {
+                offerSentRef.current = true;
+                offerSentCountRef.current++;
+                lastSignalSentAtRef.current = Date.now();
+                lastIceRestartAtRef.current = Date.now();
+                console.log('rtc_audit.ice_restart_offer', { sessionId, messageId, currentUserId, otherUserId, sent: true });
+              } else {
+                throw new Error(`ICE restart offer send failed: ${sendResult}`);
+              }
+            } catch (error) {
+              console.error('WebRTC: ICE restart offer failed', error);
+              const activePc = peerConnectionRef.current;
+              if (activePc && activePc.signalingState === 'have-local-offer') {
+                try {
+                  await activePc.setLocalDescription({ type: 'rollback' });
+                } catch {
+                  // no-op
+                }
+              }
+            } finally {
+              makingOfferRef.current = false;
+              isRestartingIceRef.current = false;
+            }
+          })();
+        }
       };
 
       // Log signaling state changes
@@ -344,18 +491,14 @@ export function useWebRTC(
       // Data channel is exclusively for chat message exchange.
 
       // Handle incoming data channel (when remote peer creates it)
-      pc.ondatachannel = (event) => {
-        const channel = event.channel;
-        dataChannelRef.current = channel;
-
+      const attachDataChannelHandlers = (channel: RTCDataChannel) => {
         channel.onopen = () => {
-          console.log('Remote data channel opened');
+          console.log('Data channel opened', { label: channel.label, readyState: channel.readyState });
         };
 
         channel.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            // Only handle chat messages via data channel
             if (data.type === 'message') {
               setMessages((prev) => [
                 ...prev,
@@ -373,36 +516,11 @@ export function useWebRTC(
         };
       };
 
-      // Create data channel for chat (if we're the initiator)
-      const dataChannel = pc.createDataChannel('chat', {
-        ordered: true,
-      });
-
-      dataChannel.onopen = () => {
-        console.log('Local data channel opened');
+      pc.ondatachannel = (event) => {
+        const channel = event.channel;
+        dataChannelRef.current = channel;
+        attachDataChannelHandlers(channel);
       };
-
-      dataChannel.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          // Only handle chat messages via data channel
-          if (data.type === 'message') {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: Date.now().toString(),
-                sender: 'remote',
-                text: data.text,
-                timestamp: new Date(),
-              },
-            ]);
-          }
-        } catch (error) {
-          console.error('Error parsing data channel message:', error);
-        }
-      };
-
-      dataChannelRef.current = dataChannel;
 
       // ============================================
       // SIGNALING: Uses Supabase Realtime ONLY
@@ -426,7 +544,25 @@ export function useWebRTC(
         return pc;
       }
 
-      const channel = supabaseClient.channel(`room:${sessionId}`, {
+      let channelName = signalingChannelNameRef.current;
+      if (!channelName) {
+        try {
+          channelName = await fetchSignalingChannelName();
+          signalingModeRef.current = 'validated';
+        } catch (error) {
+          if (isAuthBootstrapError(error)) {
+            console.error('WebRTC: auth-related signaling bootstrap failure (no legacy fallback)', {
+              error: toErrorMessage(error),
+            });
+            throw error;
+          }
+          signalingModeRef.current = 'legacy-fallback';
+          console.warn('WebRTC: Falling back to legacy channel name (rtc-channel validation unavailable)', error);
+          channelName = `room:${sessionId}`;
+        }
+      }
+      signalingChannelNameRef.current = channelName;
+      const channel = supabaseClient.channel(channelName, {
         config: {
           broadcast: { self: false },
         },
@@ -434,13 +570,16 @@ export function useWebRTC(
       channelRef.current = channel;
       console.log('WebRTC: Channel created', {
         sessionId,
-        channelName: `room:${sessionId}`,
+        channelName,
+        signalingMode: signalingModeRef.current,
         timestamp: Date.now(),
       });
+      console.log('rtc_audit.signaling_mode', { sessionId, mode: signalingModeRef.current, channelName });
 
         // Helper function to attempt offer creation
         const attemptOfferCreation = async (otherUserId: string, isInitiator?: boolean) => {
           if (isStaleSetup()) return;
+          if (negotiationBlockedRef.current) return;
           // Re-check if we should be initiator (in case otherUserId was discovered)
           if (isInitiator === undefined) {
             if (otherUserId === currentUserId) {
@@ -467,6 +606,36 @@ export function useWebRTC(
             }
             try {
               makingOfferRef.current = true;
+              if (!dataChannelRef.current) {
+                try {
+                  const dataChannel = pc.createDataChannel('chat', { ordered: true });
+                  dataChannelRef.current = dataChannel;
+                  dataChannel.onopen = () => {
+                    console.log('Data channel opened', { label: dataChannel.label, readyState: dataChannel.readyState });
+                  };
+                  dataChannel.onmessage = (event) => {
+                    try {
+                      const data = JSON.parse(event.data);
+                      if (data.type === 'message') {
+                        setMessages((prev) => [
+                          ...prev,
+                          {
+                            id: Date.now().toString(),
+                            sender: 'remote',
+                            text: data.text,
+                            timestamp: new Date(),
+                          },
+                        ]);
+                      }
+                    } catch (error) {
+                      console.error('Error parsing data channel message:', error);
+                    }
+                  };
+                  console.log('rtc_audit.datachannel_status', { created: true });
+                } catch (error) {
+                  console.warn('rtc_audit.datachannel_status', { created: false, error: toErrorMessage(error) });
+                }
+              }
               console.log('WebRTC: Creating offer as initiator', {
                 currentUserId,
                 otherUserId,
@@ -523,135 +692,184 @@ export function useWebRTC(
           }
         };
 
-        channel
-          .on('broadcast', { event: 'signal' }, (payload: { payload?: { from?: string; to?: string; id?: string; type?: string; offer?: RTCSessionDescriptionInit; answer?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit } }) => {
-            // Raw event logging to verify payload structure (log once per event type)
-            try {
-              const safePayload = {
-                type: (payload as any).type,
-                event: (payload as any).event,
-                payload: payload.payload,
-              };
-              console.log('RAW SIGNAL EVENT:', JSON.stringify(safePayload, null, 2));
-            } catch (e) {
-              console.log('RAW SIGNAL EVENT (stringified):', payload);
-            }
-            
-            const { from, to, id: messageId, ...data } = payload.payload || {};
-            if (!from) return;
-            if (from === currentUserId) return; // Ignore own signals
-            if (to && to !== currentUserId) return; // Ignore signals addressed to someone else
+        const signalHandler = (payload: any) => {
+          if (isStaleSetup()) return;
+          // Raw event logging to verify payload structure (log once per event type)
+          try {
+            const safePayload = {
+              type: payload.type,
+              event: payload.event,
+              payload: payload.payload,
+            };
+            console.log('RAW SIGNAL EVENT:', JSON.stringify(safePayload, null, 2));
+          } catch {
+            console.log('RAW SIGNAL EVENT (stringified):', payload);
+          }
 
-            // Deduplicate messages by ID
-            if (messageId) {
-              if (processedMessageIdsRef.current.has(messageId)) {
-                console.log('WebRTC: Ignoring duplicate message', { messageId, type: data.type, from });
-                return;
-              }
-              processedMessageIdsRef.current.add(messageId);
-              // Limit set size to prevent memory leak (keep last 1000)
-              if (processedMessageIdsRef.current.size > 1000) {
-                const firstId = processedMessageIdsRef.current.values().next().value;
-                if (firstId) {
-                  processedMessageIdsRef.current.delete(firstId);
-                }
+          const signal = payload?.payload as Record<string, unknown> | undefined;
+          if (!signal) return;
+
+          const from = typeof signal.from === 'string' ? signal.from : null;
+          const to = typeof signal.to === 'string' ? signal.to : null;
+          const messageId = typeof signal.id === 'string' ? signal.id : undefined;
+          const signalType = typeof signal.type === 'string' ? signal.type : null;
+          const remoteSignalingMode = typeof signal.signalingMode === 'string' ? signal.signalingMode : null;
+
+          if (!from) return;
+          if (from === currentUserId) return; // Ignore own signals
+          if (to && to !== currentUserId) return; // Ignore signals addressed to someone else
+
+          const expectedRemoteId = remoteUserId || remoteUserIdRef.current;
+          if (expectedRemoteId && from !== expectedRemoteId) {
+            console.warn('rtc_audit.signal_recv', { accepted: false, reason: 'unexpected_sender', from, expectedRemoteId, signalType });
+            return;
+          }
+          if (!signalType || !SIGNAL_TYPES.has(signalType)) {
+            console.warn('rtc_audit.signal_recv', { accepted: false, reason: 'unknown_type', from, signalType });
+            return;
+          }
+
+          // Deduplicate messages by ID
+          if (messageId) {
+            if (processedMessageIdsRef.current.has(messageId)) {
+              console.log('WebRTC: Ignoring duplicate message', { messageId, type: signalType, from });
+              return;
+            }
+            processedMessageIdsRef.current.add(messageId);
+            // Limit set size to prevent memory leak (keep last 1000)
+            if (processedMessageIdsRef.current.size > 1000) {
+              const firstId = processedMessageIdsRef.current.values().next().value;
+              if (firstId) {
+                processedMessageIdsRef.current.delete(firstId);
               }
             }
+          }
 
-            lastSignalRecvAtRef.current = Date.now();
-
-            // Track remote user ID from first signal received
-            if (!remoteUserIdRef.current && from) {
-              remoteUserIdRef.current = from;
-              console.log('WebRTC: Discovered remote user ID from signal', { from, currentUserId });
-            }
-
-            if (data.type === 'join') {
-              joinRecvCountRef.current++;
-              console.log('WebRTC: RECV join from', from);
-              // Discover remote user ID from join message (always update if different)
-              if (from && from !== currentUserId) {
-                const wasAlreadySet = remoteUserIdRef.current === from;
-                remoteUserIdRef.current = from;
-                console.log('WebRTC: SET otherUserId', { from, currentUserId, wasAlreadySet });
-                // Trigger offer creation if we're initiator (check even if was already set)
-                const isInitiator = currentUserId < from;
-                console.log('WebRTC: INITIATOR?', isInitiator, { currentUserId, otherUserId: from });
-                if (isInitiator && pc && pc.signalingState === 'stable' && !offerSentRef.current && !hasReceivedOfferRef.current) {
-                  console.log('WebRTC: Triggering offer creation from join handler', {
-                    pcExists: !!pc,
-                    signalingState: pc.signalingState,
-                    offerSent: offerSentRef.current,
-                    hasReceivedOffer: hasReceivedOfferRef.current,
-                  });
-                  attemptOfferCreation(from, true);
-                } else if (
-                  isInitiator &&
-                  pc?.signalingState === 'have-local-offer' &&
-                  offerSentRef.current &&
-                  answerRecvCountRef.current === 0
-                ) {
-                  const offerAgeMs = lastSignalSentAtRef.current ? Date.now() - lastSignalSentAtRef.current : null;
-                  if (offerAgeMs === null || offerAgeMs > 3000) {
-                    console.warn('WebRTC: Late join detected while waiting for answer, rolling back and re-offering', {
-                      offerAgeMs,
-                      currentUserId,
-                      otherUserId: from,
-                    });
-                    void (async () => {
-                      try {
-                        await pc.setLocalDescription({ type: 'rollback' });
-                        offerSentRef.current = false;
-                        answerAppliedRef.current = false;
-                        hasReceivedOfferRef.current = false;
-                        attemptOfferCreation(from, true);
-                      } catch (rollbackError) {
-                        console.error('WebRTC: Failed to rollback local offer on late-join recovery', rollbackError);
-                      }
-                    })();
-                  }
-                } else {
-                  console.log('WebRTC: Cannot create offer from join handler', {
-                    isInitiator,
-                    pcExists: !!pc,
-                    signalingState: pc?.signalingState,
-                    offerSent: offerSentRef.current,
-                    hasReceivedOffer: hasReceivedOfferRef.current,
-                  });
-                }
-              }
-            } else if (data.type === 'offer') {
-              offerRecvCountRef.current++;
-              console.log('WebRTC: RECV offer', { from, currentUserId });
-              if (data.offer) {
-                handleOffer(data.offer, pc, from, messageId);
-              }
-            } else if (data.type === 'answer') {
-              answerRecvCountRef.current++;
-              console.log('WebRTC: RECV answer', { from, currentUserId, messageId });
-              if (data.answer) {
-                handleAnswer(data.answer, pc, messageId);
-              }
-            } else if (data.type === 'ice-candidate') {
-              handleIceCandidate(data.candidate!, pc);
-            }
-          })
-          .subscribe((status: string) => {
-            subscribedStatusRef.current = status;
-            console.log('WebRTC: Subscription status changed', {
-              status,
-              sessionId,
-              channelName: `room:${sessionId}`,
-              timestamp: Date.now(),
+          if (negotiationBlockedRef.current) {
+            console.warn('rtc_audit.signal_recv', {
+              accepted: false,
+              reason: failureReasonRef.current || 'negotiation_blocked',
+              from,
+              signalType,
             });
-            if (status === 'SUBSCRIBED') {
-              console.log('WebRTC: SIGNAL SUBSCRIBED');
-              
-              // Send join signal immediately to break deadlock
-              if (!joinSentRef.current && channelRef.current && subscribedStatusRef.current === 'SUBSCRIBED') {
-                try {
-                  const messageId = crypto.randomUUID();
-                  void channelRef.current.send({
+            return;
+          }
+
+          lastSignalRecvAtRef.current = Date.now();
+
+          // Track remote user ID from first signal received
+          if (!remoteUserIdRef.current && from) {
+            remoteUserIdRef.current = from;
+            console.log('WebRTC: Discovered remote user ID from signal', { from, currentUserId });
+          }
+
+          if (signalType === 'join') {
+            if (expectedRemoteId && from === expectedRemoteId && remoteSignalingMode !== signalingModeRef.current) {
+              negotiationBlockedRef.current = true;
+              failureReasonRef.current = 'SIGNALING_MODE_MISMATCH';
+              setConnectionState('failed');
+              console.warn('rtc_audit.signal_recv', {
+                accepted: false,
+                reason: 'SIGNALING_MODE_MISMATCH',
+                sessionId,
+                from,
+                expectedRemoteId,
+                localMode: signalingModeRef.current,
+                remoteMode: remoteSignalingMode,
+              });
+              return;
+            }
+
+            joinRecvCountRef.current++;
+            console.log('WebRTC: RECV join from', from);
+            // Discover remote user ID from join message (always update if different)
+            if (from !== currentUserId) {
+              const wasAlreadySet = remoteUserIdRef.current === from;
+              remoteUserIdRef.current = from;
+              console.log('WebRTC: SET otherUserId', { from, currentUserId, wasAlreadySet });
+              // Trigger offer creation if we're initiator (check even if was already set)
+              const isInitiator = currentUserId < from;
+              console.log('WebRTC: INITIATOR?', isInitiator, { currentUserId, otherUserId: from });
+              if (isInitiator && pc && pc.signalingState === 'stable' && !offerSentRef.current && !hasReceivedOfferRef.current) {
+                console.log('WebRTC: Triggering offer creation from join handler', {
+                  pcExists: !!pc,
+                  signalingState: pc.signalingState,
+                  offerSent: offerSentRef.current,
+                  hasReceivedOffer: hasReceivedOfferRef.current,
+                });
+                attemptOfferCreation(from, true);
+              } else if (
+                isInitiator &&
+                pc?.signalingState === 'have-local-offer' &&
+                offerSentRef.current &&
+                answerRecvCountRef.current === 0
+              ) {
+                const offerAgeMs = lastSignalSentAtRef.current ? Date.now() - lastSignalSentAtRef.current : null;
+                if (offerAgeMs === null || offerAgeMs > 3000) {
+                  console.warn('WebRTC: Late join detected while waiting for answer, rolling back and re-offering', {
+                    offerAgeMs,
+                    currentUserId,
+                    otherUserId: from,
+                  });
+                  void (async () => {
+                    try {
+                      await pc.setLocalDescription({ type: 'rollback' });
+                      offerSentRef.current = false;
+                      answerAppliedRef.current = false;
+                      hasReceivedOfferRef.current = false;
+                      attemptOfferCreation(from, true);
+                    } catch (rollbackError) {
+                      console.error('WebRTC: Failed to rollback local offer on late-join recovery', rollbackError);
+                    }
+                  })();
+                }
+              } else {
+                console.log('WebRTC: Cannot create offer from join handler', {
+                  isInitiator,
+                  pcExists: !!pc,
+                  signalingState: pc?.signalingState,
+                  offerSent: offerSentRef.current,
+                  hasReceivedOffer: hasReceivedOfferRef.current,
+                });
+              }
+            }
+          } else if (signalType === 'offer') {
+            offerRecvCountRef.current++;
+            console.log('WebRTC: RECV offer', { from, currentUserId });
+            if (signal.offer) {
+              handleOffer(signal.offer as RTCSessionDescriptionInit, pc, from, messageId);
+            }
+          } else if (signalType === 'answer') {
+            answerRecvCountRef.current++;
+            console.log('WebRTC: RECV answer', { from, currentUserId, messageId });
+            if (signal.answer) {
+              handleAnswer(signal.answer as RTCSessionDescriptionInit, pc, messageId);
+            }
+          } else if (signalType === 'ice-candidate') {
+            handleIceCandidate(signal.candidate as RTCIceCandidateInit, pc);
+          }
+        };
+
+        const statusHandler = (status: string) => {
+          if (isStaleSetup()) return;
+          subscribedStatusRef.current = status;
+          console.log('WebRTC: Subscription status changed', {
+            status,
+            sessionId,
+            channelName,
+            signalingMode: signalingModeRef.current,
+            timestamp: Date.now(),
+          });
+          if (status === 'SUBSCRIBED') {
+            console.log('WebRTC: SIGNAL SUBSCRIBED');
+            if (negotiationBlockedRef.current) return;
+
+            // Send join signal immediately to break deadlock
+            if (!joinSentRef.current && channelRef.current && subscribedStatusRef.current === 'SUBSCRIBED') {
+              try {
+                const messageId = crypto.randomUUID();
+                void channelRef.current
+                  .send({
                     type: 'broadcast',
                     event: 'signal',
                     payload: {
@@ -659,9 +877,11 @@ export function useWebRTC(
                       type: 'join',
                       from: currentUserId,
                       to: remoteUserId || null,
+                      signalingMode: signalingModeRef.current,
                       ts: Date.now(),
                     },
-                  }).then((sendResult: string) => {
+                  })
+                  .then((sendResult: string) => {
                     if (sendResult === 'ok') {
                       joinSentRef.current = true;
                       lastSignalSentAtRef.current = Date.now();
@@ -669,75 +889,82 @@ export function useWebRTC(
                     } else {
                       console.warn('WebRTC: Join send returned non-ok status', { sendResult, messageId });
                     }
-                  }).catch((sendError: unknown) => {
+                  })
+                  .catch((sendError: unknown) => {
                     console.error('WebRTC: Error sending join signal', sendError);
                   });
-                } catch (error) {
-                  console.error('WebRTC: Error sending join signal', error);
+              } catch (error) {
+                console.error('WebRTC: Error sending join signal', error);
+              }
+            } else if (!joinSentRef.current) {
+              console.warn('WebRTC: Cannot send join - channel not ready', {
+                hasChannel: !!channelRef.current,
+                status: subscribedStatusRef.current,
+              });
+            }
+
+            const otherUserId = remoteUserId || remoteUserIdRef.current;
+
+            console.log('WebRTC: Subscribed to channel', {
+              currentUserId,
+              otherUserId,
+              sessionId,
+              hasRemoteUserId: !!otherUserId,
+              userIdsMatch: currentUserId === otherUserId,
+            });
+
+            if (!otherUserId) {
+              console.warn('WebRTC: Waiting for remote user ID - cannot determine initiator yet');
+              const checkInterval = setInterval(() => {
+                const discoveredOtherId = remoteUserIdRef.current;
+                if (discoveredOtherId && discoveredOtherId !== currentUserId) {
+                  clearInterval(checkInterval);
+                  console.log('WebRTC: Discovered remote user ID, attempting offer creation', {
+                    currentUserId,
+                    discoveredOtherId,
+                  });
+                  attemptOfferCreation(discoveredOtherId);
                 }
-              } else if (!joinSentRef.current) {
-                console.warn('WebRTC: Cannot send join - channel not ready', {
-                  hasChannel: !!channelRef.current,
-                  status: subscribedStatusRef.current,
+              }, 500);
+              setTimeout(() => clearInterval(checkInterval), 10000);
+              return;
+            }
+
+            if (otherUserId === currentUserId) {
+              console.error(
+                'WebRTC: ERROR - otherUserId matches currentUserId! Both users appear to be the same. Check that you are logged in as different users.'
+              );
+              return;
+            }
+
+            // Use string comparison for deterministic initiator selection
+            const isInitiator = currentUserId < otherUserId;
+
+            console.log('WebRTC: INITIATOR?', isInitiator, {
+              currentUserId,
+              otherUserId,
+            });
+
+            // Attempt offer creation after a short delay to ensure everything is ready
+            // But also set up a check to retry if join signal arrives later
+            setTimeout(() => {
+              if (pc && pc.signalingState === 'stable' && !offerSentRef.current && !hasReceivedOfferRef.current) {
+                attemptOfferCreation(otherUserId, isInitiator);
+              } else {
+                console.log('WebRTC: Deferring offer creation', {
+                  pcExists: !!pc,
+                  signalingState: pc?.signalingState,
+                  offerSent: offerSentRef.current,
+                  hasReceivedOffer: hasReceivedOfferRef.current,
                 });
               }
-              
-              const otherUserId = remoteUserId || remoteUserIdRef.current;
+            }, 1000);
+          }
+        };
 
-              console.log('WebRTC: Subscribed to channel', {
-                currentUserId,
-                otherUserId,
-                sessionId,
-                hasRemoteUserId: !!otherUserId,
-                userIdsMatch: currentUserId === otherUserId,
-              });
-
-              if (!otherUserId) {
-                console.warn('WebRTC: Waiting for remote user ID - cannot determine initiator yet');
-                const checkInterval = setInterval(() => {
-                  const discoveredOtherId = remoteUserIdRef.current;
-                  if (discoveredOtherId && discoveredOtherId !== currentUserId) {
-                    clearInterval(checkInterval);
-                    console.log('WebRTC: Discovered remote user ID, attempting offer creation', {
-                      currentUserId,
-                      discoveredOtherId,
-                    });
-                    attemptOfferCreation(discoveredOtherId);
-                  }
-                }, 500);
-                setTimeout(() => clearInterval(checkInterval), 10000);
-                return;
-              }
-
-              if (otherUserId === currentUserId) {
-                console.error('WebRTC: ERROR - otherUserId matches currentUserId! Both users appear to be the same. Check that you are logged in as different users.');
-                return;
-              }
-
-              // Use string comparison for deterministic initiator selection
-              const isInitiator = currentUserId < otherUserId;
-
-              console.log('WebRTC: INITIATOR?', isInitiator, {
-                currentUserId,
-                otherUserId,
-              });
-
-              // Attempt offer creation after a short delay to ensure everything is ready
-              // But also set up a check to retry if join signal arrives later
-              setTimeout(() => {
-                if (pc && pc.signalingState === 'stable' && !offerSentRef.current && !hasReceivedOfferRef.current) {
-                  attemptOfferCreation(otherUserId, isInitiator);
-                } else {
-                  console.log('WebRTC: Deferring offer creation', {
-                    pcExists: !!pc,
-                    signalingState: pc?.signalingState,
-                    offerSent: offerSentRef.current,
-                    hasReceivedOffer: hasReceivedOfferRef.current,
-                  });
-                }
-              }, 1000);
-            }
-          });
+        signalBroadcastHandlerRef.current = signalHandler;
+        channelStatusHandlerRef.current = statusHandler;
+        channel.on('broadcast', { event: 'signal' }, signalHandler).subscribe(statusHandler);
 
       return pc;
     } catch (error: any) {
@@ -745,7 +972,91 @@ export function useWebRTC(
       setConnectionState('failed');
       throw error;
     }
-  }, [sessionId, currentUserId, remoteUserId, ensureSupabaseClient]);
+  }, [sessionId, currentUserId, ensureSupabaseClient, fetchSignalingChannelName]);
+
+  useEffect(() => {
+    const supabaseBrowser = createSupabaseBrowserClient();
+    const {
+      data: { subscription },
+    } = supabaseBrowser.auth.onAuthStateChange((event: AuthChangeEvent, authSession: Session | null) => {
+      console.log('rtc_audit.auth_event', {
+        sessionId,
+        currentUserId,
+        event,
+        hasSession: !!authSession,
+      });
+
+      if (event === 'SIGNED_OUT') {
+        supabaseRef.current = null;
+        lastRejoinAccessTokenRef.current = null;
+        return;
+      }
+      if (event !== 'TOKEN_REFRESHED') return;
+
+      const accessToken = authSession?.access_token ?? null;
+      if (!accessToken) return;
+      if (accessToken === lastRejoinAccessTokenRef.current) return;
+      lastRejoinAccessTokenRef.current = accessToken;
+
+      if (isRejoiningChannelRef.current || negotiationBlockedRef.current) return;
+
+      const channelName = signalingChannelNameRef.current;
+      const signalHandler = signalBroadcastHandlerRef.current;
+      const statusHandler = channelStatusHandlerRef.current;
+      if (!channelName || !signalHandler || !statusHandler || !channelRef.current) return;
+
+      void (async () => {
+        isRejoiningChannelRef.current = true;
+        console.log('rtc_audit.channel_rejoin', {
+          sessionId,
+          phase: 'start',
+          channelName,
+          mode: signalingModeRef.current,
+          event,
+        });
+
+        try {
+          await Promise.resolve(channelRef.current?.unsubscribe());
+          channelRef.current = null;
+          subscribedStatusRef.current = null;
+          joinSentRef.current = false;
+          supabaseRef.current = null;
+
+          const nextClient = await ensureSupabaseClient();
+          if (!nextClient) {
+            throw new Error('Supabase client unavailable during rejoin');
+          }
+
+          const rejoinedChannel = nextClient.channel(channelName, {
+            config: {
+              broadcast: { self: false },
+            },
+          });
+
+          channelRef.current = rejoinedChannel;
+          rejoinedChannel.on('broadcast', { event: 'signal' }, signalHandler).subscribe(statusHandler);
+          console.log('rtc_audit.channel_rejoin', {
+            sessionId,
+            phase: 'subscribed',
+            channelName,
+            mode: signalingModeRef.current,
+          });
+        } catch (error) {
+          console.error('rtc_audit.channel_rejoin', {
+            sessionId,
+            phase: 'error',
+            error: toErrorMessage(error),
+          });
+        } finally {
+          isRejoiningChannelRef.current = false;
+        }
+      })();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [sessionId, currentUserId, ensureSupabaseClient]);
 
   const handleOffer = async (
     offer: RTCSessionDescriptionInit,
@@ -754,6 +1065,7 @@ export function useWebRTC(
     messageId?: string
   ) => {
     try {
+      if (negotiationBlockedRef.current) return;
       const isPolitePeer = currentUserId > fromUserId;
       const offerCollision = makingOfferRef.current || pc.signalingState !== 'stable';
       ignoreOfferRef.current = !isPolitePeer && offerCollision;
@@ -836,6 +1148,7 @@ export function useWebRTC(
 
   const handleAnswer = async (answer: RTCSessionDescriptionInit, pc: RTCPeerConnection, messageId?: string) => {
     try {
+      if (negotiationBlockedRef.current) return;
       // Guard: Only process answer if we're in have-local-offer state (initiator waiting for answer)
       if (pc.signalingState !== 'have-local-offer') {
         console.warn('WebRTC: Ignoring answer - wrong signaling state', {
@@ -1037,6 +1350,15 @@ export function useWebRTC(
       processedMessageIdsRef.current.clear();
       subscribedStatusRef.current = null;
       remoteUserIdRef.current = null;
+      signalingChannelNameRef.current = null;
+      isRestartingIceRef.current = false;
+      lastIceRestartAtRef.current = null;
+      signalingModeRef.current = 'validated';
+      negotiationBlockedRef.current = false;
+      failureReasonRef.current = null;
+      isRejoiningChannelRef.current = false;
+      signalBroadcastHandlerRef.current = null;
+      channelStatusHandlerRef.current = null;
     };
   }, [sessionId, currentUserId, setupPeerConnection]);
 
@@ -1103,6 +1425,18 @@ export function useWebRTC(
       return;
     }
 
+    const trackCountsBefore = {
+      localTracks: 0,
+      senderTracks: peerConnectionRef.current.getSenders().filter((sender) => !!sender.track).length,
+    };
+    let enableSucceeded = false;
+    console.log('rtc_audit.enable_local_media_start', {
+      sessionId,
+      currentUserId,
+      trackCountsBefore,
+      makingOffer: makingOfferRef.current,
+    });
+
     try {
       console.log('WebRTC: Enabling local media (transitioning from viewer mode)');
       setConnectionState('connecting');
@@ -1141,31 +1475,47 @@ export function useWebRTC(
       // Otherwise, the remote peer will never receive the new media when the coach
       // enables camera/mic (especially when the coach is not the initial initiator).
       if (peerConnectionRef.current.signalingState === 'stable' && channelRef.current && subscribedStatusRef.current === 'SUBSCRIBED') {
-        const otherUserId = remoteUserId || remoteUserIdRef.current;
+        const otherUserId = remoteUserIdRef.current;
         if (otherUserId && otherUserId !== currentUserId) {
           console.log('WebRTC: Creating renegotiation offer with local media tracks');
-          const offer = await peerConnectionRef.current.createOffer();
-          await peerConnectionRef.current.setLocalDescription(offer);
+          makingOfferRef.current = true;
+          try {
+            const offer = await peerConnectionRef.current.createOffer();
+            await peerConnectionRef.current.setLocalDescription(offer);
 
-          const messageId = crypto.randomUUID();
-          const sendResult = await channelRef.current.send({
-            type: 'broadcast',
-            event: 'signal',
-            payload: {
-              id: messageId,
-              type: 'offer',
-              offer: offer,
-              from: currentUserId,
-              to: otherUserId,
-            },
-          });
-          if (sendResult !== 'ok') {
-            throw new Error(`Renegotiation offer send failed with status: ${sendResult}`);
+            const messageId = crypto.randomUUID();
+            const sendResult = await channelRef.current.send({
+              type: 'broadcast',
+              event: 'signal',
+              payload: {
+                id: messageId,
+                type: 'offer',
+                offer: offer,
+                from: currentUserId,
+                to: otherUserId,
+              },
+            });
+            if (sendResult !== 'ok') {
+              throw new Error(`Renegotiation offer send failed with status: ${sendResult}`);
+            }
+            offerSentRef.current = true;
+            offerSentCountRef.current++;
+            lastSignalSentAtRef.current = Date.now();
+            console.log('WebRTC: SEND offer (renegotiation)', { currentUserId, otherUserId, messageId, sendResult });
+          } catch (error) {
+            offerSentRef.current = false;
+            const activePc = peerConnectionRef.current;
+            if (activePc && activePc.signalingState === 'have-local-offer') {
+              try {
+                await activePc.setLocalDescription({ type: 'rollback' });
+              } catch {
+                // no-op
+              }
+            }
+            throw error;
+          } finally {
+            makingOfferRef.current = false;
           }
-          offerSentRef.current = true;
-          offerSentCountRef.current++;
-          lastSignalSentAtRef.current = Date.now();
-          console.log('WebRTC: SEND offer (renegotiation)', { currentUserId, otherUserId, messageId, sendResult });
         } else {
           console.warn('WebRTC: Cannot renegotiate - missing or invalid otherUserId', { currentUserId, otherUserId });
         }
@@ -1178,11 +1528,26 @@ export function useWebRTC(
       }
 
       console.log('WebRTC: ✅ Local media enabled successfully');
+      enableSucceeded = true;
     } catch (error: any) {
       console.error('WebRTC: ❌ Error enabling local media:', error);
       setConnectionState('failed');
+    } finally {
+      const pc = peerConnectionRef.current;
+      const trackCountsAfter = {
+        localTracks: localStreamRef.current?.getTracks().length ?? 0,
+        senderTracks: pc ? pc.getSenders().filter((sender) => !!sender.track).length : 0,
+      };
+      console.log('rtc_audit.enable_local_media_end', {
+        sessionId,
+        currentUserId,
+        success: enableSucceeded,
+        trackCountsBefore,
+        trackCountsAfter,
+        makingOffer: makingOfferRef.current,
+      });
     }
-  }, [currentUserId, remoteUserId]);
+  }, [currentUserId, sessionId]);
 
   // Sync mute state when remote stream changes
   useEffect(() => {
@@ -1230,6 +1595,15 @@ export function useWebRTC(
     iceCandidateQueueRef.current = [];
     subscribedStatusRef.current = null;
     processedMessageIdsRef.current.clear();
+    signalingChannelNameRef.current = null;
+    isRestartingIceRef.current = false;
+    lastIceRestartAtRef.current = null;
+    signalingModeRef.current = 'validated';
+    negotiationBlockedRef.current = false;
+    failureReasonRef.current = null;
+    isRejoiningChannelRef.current = false;
+    signalBroadcastHandlerRef.current = null;
+    channelStatusHandlerRef.current = null;
     setIsMicOn(false);
     setIsCameraOn(false);
     setIsViewerMode(initialViewerModeRef.current);
@@ -1259,7 +1633,14 @@ export function useWebRTC(
     lastSignalSentAtRef.current = null;
     lastSignalRecvAtRef.current = null;
     subscribedStatusRef.current = null;
+    lastIceRestartAtRef.current = null;
     processedMessageIdsRef.current.clear();
+    signalingModeRef.current = 'validated';
+    negotiationBlockedRef.current = false;
+    failureReasonRef.current = null;
+    isRejoiningChannelRef.current = false;
+    signalBroadcastHandlerRef.current = null;
+    channelStatusHandlerRef.current = null;
     setTimeout(() => {
       setupPeerConnection().catch((error) => {
         console.error('Failed to retry connection:', error);

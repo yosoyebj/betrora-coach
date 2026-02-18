@@ -1,19 +1,30 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "../../lib/supabaseClient";
 import { logDebugEvent } from "../../lib/debugLogger";
 import { useSupabaseAuth } from "../../hooks/useSupabaseAuth";
 import Link from "next/link";
 
+const CONFIG_ERROR_MESSAGE =
+  "Supabase is not configured. Create a .env.local file in the project root with NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (see .env.example or README), then restart the dev server.";
+
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading } = useSupabaseAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Show error from URL (e.g. middleware redirect: ?error=config | ?error=not_coach)
+  useEffect(() => {
+    const err = searchParams.get("error");
+    if (err === "config") setError(CONFIG_ERROR_MESSAGE);
+    else if (err === "not_coach") setError("You need coach access to use this console.");
+  }, [searchParams]);
 
   // Check for magic link callback using getSessionFromUrl (more robust)
   const [processingMagicLink, setProcessingMagicLink] = useState(true);
