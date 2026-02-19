@@ -1,0 +1,10 @@
+# Coach app (coach.betrora.com) – Next.js
+# After pushing, trigger a new deploy and clear build cache if the site still shows old WebRTC behavior.
+
+[build]
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # Exclude from secrets scanning (values may appear in build output)
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,XIRSYS_CHANNEL,XIRSYS_API_KEY,XIRSYS_API_SECRET"
