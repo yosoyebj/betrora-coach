@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "../../lib/supabaseClient";
 import { logDebugEvent } from "../../lib/debugLogger";
 import { useSupabaseAuth } from "../../hooks/useSupabaseAuth";
@@ -12,7 +12,6 @@ const CONFIG_ERROR_MESSAGE =
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user, loading } = useSupabaseAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,10 +20,11 @@ export default function LoginPage() {
 
   // Show error from URL (e.g. middleware redirect: ?error=config | ?error=not_coach)
   useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
     const err = searchParams.get("error");
     if (err === "config") setError(CONFIG_ERROR_MESSAGE);
     else if (err === "not_coach") setError("You need coach access to use this console.");
-  }, [searchParams]);
+  }, []);
 
   // Check for magic link callback using getSessionFromUrl (more robust)
   const [processingMagicLink, setProcessingMagicLink] = useState(true);
