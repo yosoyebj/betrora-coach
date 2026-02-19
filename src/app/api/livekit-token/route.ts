@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
+import { AccessToken } from 'livekit-server-sdk';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const rtcSignalingSecret = process.env.RTC_SIGNALING_SECRET || '';
+// Trim to avoid "invalid token" from accidental whitespace in .env
+const livekitApiKey = (process.env.LIVEKIT_API_KEY || '').trim();
+const livekitApiSecret = (process.env.LIVEKIT_API_SECRET || '').trim();
+const livekitUrl = (process.env.LIVEKIT_URL || '').trim();
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -15,8 +18,11 @@ export async function GET(request: NextRequest) {
     if (!supabaseUrl || !supabaseAnonKey) {
       return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
     }
-    if (!rtcSignalingSecret) {
-      return NextResponse.json({ error: 'RTC signaling secret not configured' }, { status: 500 });
+    if (!livekitApiKey || !livekitApiSecret || !livekitUrl) {
+      return NextResponse.json(
+        { error: 'LiveKit not configured – set LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET' },
+        { status: 500 }
+      );
     }
 
     const authHeader = request.headers.get('authorization');
@@ -67,19 +73,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden: not a session participant' }, { status: 403 });
     }
 
-    const participants = [session.user_id, coach.user_id].sort();
-    const signatureBase = `${sessionId}:${participants[0]}:${participants[1]}`;
-    const digest = crypto.createHmac('sha256', rtcSignalingSecret).update(signatureBase).digest('hex').slice(0, 24);
-    const channelName = `room:${sessionId}:${digest}`;
+    const at = new AccessToken(livekitApiKey, livekitApiSecret, {
+      identity: user.id,
+      ttl: '2h',
+    });
 
-    return NextResponse.json(
-      {
-        channelName,
-        sessionId,
-        participantId: user.id,
-      },
-      { headers: { 'Cache-Control': 'no-store' } }
-    );
+    at.addGrant({
+      roomJoin: true,
+      room: sessionId,
+      canPublish: true,
+      canSubscribe: true,
+    });
+
+    const token = await at.toJwt();
+
+    const body: { token: string; serverUrl: string; _debug?: { serverTimeUtc: string } } = {
+      token,
+      serverUrl: livekitUrl,
+    };
+    if (process.env.NODE_ENV === 'development') {
+      body._debug = { serverTimeUtc: new Date().toISOString() };
+    }
+
+    return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'unknown';
     return NextResponse.json({ error: reason }, { status: 500 });

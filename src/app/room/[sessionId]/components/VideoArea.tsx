@@ -1,48 +1,29 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { ConnectionState } from '../hooks/useWebRTC';
+import { useTracks, VideoTrack, useLocalParticipant } from '@livekit/components-react';
+import type { TrackReference, TrackReferenceOrPlaceholder } from '@livekit/components-react';
+import { Track } from 'livekit-client';
 
 interface VideoAreaProps {
-  localStream: MediaStream | null;
-  remoteStream: MediaStream | null;
-  isCameraOn: boolean;
   otherPersonName: string;
-  connectionState: ConnectionState;
 }
 
-export default function VideoArea({
-  localStream,
-  remoteStream,
-  isCameraOn,
-  otherPersonName,
-  connectionState,
-}: VideoAreaProps) {
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+function isTrackReference(t: TrackReferenceOrPlaceholder): t is TrackReference {
+  return 'publication' in t && t.publication !== undefined;
+}
 
-  useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
-    }
-  }, [localStream]);
+export default function VideoArea({ otherPersonName }: VideoAreaProps) {
+  const { isCameraEnabled } = useLocalParticipant();
+  const tracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: false }]);
 
-  useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
-    }
-  }, [remoteStream]);
+  const remoteTrack = tracks.find((t): t is TrackReference => isTrackReference(t) && !t.participant.isLocal);
+  const localTrack = tracks.find((t): t is TrackReference => isTrackReference(t) && t.participant.isLocal);
 
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-slate-950">
       {/* Remote Video (Main) */}
-      {remoteStream ? (
-        <video
-          ref={remoteVideoRef}
-          autoPlay
-          playsInline
-          className="w-full h-full object-cover"
-        />
+      {remoteTrack ? (
+        <VideoTrack trackRef={remoteTrack} className="w-full h-full object-cover" />
       ) : (
         <div className="flex flex-col items-center justify-center text-center p-8">
           <div className="w-24 h-24 rounded-full bg-slate-800/50 flex items-center justify-center mb-4">
@@ -51,26 +32,21 @@ export default function VideoArea({
             </svg>
           </div>
           <p className="text-white/60 text-lg font-medium">Waiting for {otherPersonName}...</p>
-          {connectionState === 'connecting' && (
-            <p className="text-white/40 text-sm mt-2">Connecting...</p>
-          )}
         </div>
       )}
 
-      {/* Local Video Preview (Bottom Right) */}
-      {localStream && (
+      {/* Local Video Preview (PIP – bottom right) */}
+      {localTrack && (
         <div className="absolute bottom-4 right-4 w-48 h-36 rounded-lg overflow-hidden border-2 border-white/20 bg-slate-900 shadow-2xl">
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className={`w-full h-full object-cover ${!isCameraOn ? 'opacity-50' : ''}`}
+          <VideoTrack
+            trackRef={localTrack}
+            className={`w-full h-full object-cover ${!isCameraEnabled ? 'opacity-50' : ''}`}
+            style={{ transform: 'scaleX(-1)' }}
           />
-          {!isCameraOn && (
+          {!isCameraEnabled && (
             <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50">
               <svg className="w-8 h-8 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
               </svg>
             </div>
           )}

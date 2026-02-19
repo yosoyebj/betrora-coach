@@ -25,14 +25,6 @@ export function PendingFeedbackNotification({
     }
   );
 
-  // Debug logging
-  useEffect(() => {
-    if (coachId) {
-      console.log("PendingFeedbackNotification - coachId:", coachId);
-      console.log("PendingFeedbackNotification - pendingTasks:", pendingTasks);
-      console.log("PendingFeedbackNotification - error:", error);
-    }
-  }, [coachId, pendingTasks, error]);
 
   // Calculate time ago for the most recent task
   useEffect(() => {
