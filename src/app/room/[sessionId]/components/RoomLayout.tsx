@@ -196,12 +196,12 @@ function InnerRoom({
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Video Area (Left) */}
-        <div className="flex-1 relative bg-slate-950">
+        <div className="room-video-area flex-1 relative bg-slate-950">
           <VideoArea otherPersonName={otherPersonName} />
         </div>
 
         {/* Sidebar (Right) */}
-        <div className="w-80 bg-slate-900/60 backdrop-blur-md border-l border-white/10 flex flex-col h-full overflow-hidden">
+        <div className="w-80 bg-slate-900 border-l border-slate-700/80 flex flex-col h-full overflow-hidden">
           <Sidebar
             activeTab={activeTab}
             onTabChange={setActiveTab}

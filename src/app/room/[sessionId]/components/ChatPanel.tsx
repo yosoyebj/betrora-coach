@@ -73,7 +73,7 @@ export default function ChatPanel({ sendMessage, messages }: ChatPanelProps) {
                 className={`max-w-[75%] rounded-lg px-3 py-2 ${
                   message.sender === 'local'
                     ? 'bg-indigo-500/20 text-indigo-200 border border-indigo-500/40'
-                    : 'bg-slate-800/50 text-white border border-slate-700/50'
+                    : 'bg-slate-800 text-white border border-slate-700/80'
                 }`}
               >
                 <p className="text-sm">{message.text}</p>
@@ -88,7 +88,7 @@ export default function ChatPanel({ sendMessage, messages }: ChatPanelProps) {
       </div>
 
       {/* Input - Always visible at bottom */}
-      <div className="flex-shrink-0 border-t border-white/10 bg-slate-900/60 z-10">
+      <div className="flex-shrink-0 border-t border-slate-700/80 bg-slate-900 z-10">
         <form onSubmit={handleSubmit} className="p-3">
           <div className="flex gap-2 items-center">
             <input
@@ -96,7 +96,7 @@ export default function ChatPanel({ sendMessage, messages }: ChatPanelProps) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Type a message..."
-              className="flex-1 px-3 py-2.5 rounded-lg bg-slate-800/50 border border-slate-700/50 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm"
+              className="flex-1 px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-600/70 text-white placeholder:text-white/55 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm"
             />
             <button
               type="submit"

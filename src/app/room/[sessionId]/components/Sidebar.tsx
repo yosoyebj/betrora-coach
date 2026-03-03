@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import ChatPanel from './ChatPanel';
 import TasksPanel from './TasksPanel';
 
@@ -53,13 +52,13 @@ export default function Sidebar({
   return (
     <div className="flex flex-col h-full">
       {/* Tab Navigation */}
-      <div className="flex border-b border-white/10">
+      <div className="flex border-b border-slate-700/80">
         <button
           onClick={() => onTabChange('chat')}
           className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
             activeTab === 'chat'
-              ? 'bg-slate-800/50 text-white border-b-2 border-indigo-500'
-              : 'text-white/60 hover:text-white hover:bg-slate-800/30'
+              ? 'bg-slate-800 text-slate-100 border-b-2 border-indigo-500'
+              : 'text-slate-300 hover:text-slate-100 hover:bg-slate-800/70'
           }`}
         >
           Chat
@@ -68,8 +67,8 @@ export default function Sidebar({
           onClick={() => onTabChange('tasks')}
           className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
             activeTab === 'tasks'
-              ? 'bg-slate-800/50 text-white border-b-2 border-indigo-500'
-              : 'text-white/60 hover:text-white hover:bg-slate-800/30'
+              ? 'bg-slate-800 text-slate-100 border-b-2 border-indigo-500'
+              : 'text-slate-300 hover:text-slate-100 hover:bg-slate-800/70'
           }`}
         >
           Tasks

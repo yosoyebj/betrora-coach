@@ -79,16 +79,19 @@ function CoachTaskCard({
       style={{
         background: 'linear-gradient(145deg, rgba(15,23,42,0.98) 0%, rgba(20,32,60,0.95) 100%)',
         border: isCompleted
-          ? '1px solid rgba(59,130,246,0.3)'
+          ? '1px solid rgba(59,130,246,0.35)'
           : '1px solid rgba(255,255,255,0.07)',
+        boxShadow: isCompleted
+          ? '0 0 20px rgba(59,130,246,0.12), 0 8px 32px rgba(0,0,0,0.5)'
+          : '0 8px 32px rgba(0,0,0,0.5)',
       }}
     >
       {/* Breathing glow — active tasks only */}
       {!isCompleted && (
         <motion.div
           className="absolute inset-x-0 top-0 h-24 pointer-events-none"
-          animate={{ opacity: [0, 0.1, 0] }}
-          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1.5 }}
+          animate={{ opacity: [0, 0.12, 0] }}
+          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1 }}
           style={{
             background: 'radial-gradient(ellipse at 50% 0%, #3B82F6 0%, transparent 75%)',
             borderRadius: '18px 18px 0 0',
@@ -104,7 +107,7 @@ function CoachTaskCard({
           animate={{ x: '200%' }}
           transition={{ duration: 1.2, ease: 'easeInOut', delay: 0.1 }}
           style={{
-            background: 'linear-gradient(90deg, transparent 0%, rgba(59,130,246,0.12) 50%, transparent 100%)',
+            background: 'linear-gradient(90deg, transparent 0%, rgba(59,130,246,0.08) 50%, transparent 100%)',
           }}
         />
       )}
@@ -114,14 +117,14 @@ function CoachTaskCard({
         <div className="flex items-start justify-between gap-3">
           <h3
             className="text-[15px] font-bold leading-snug tracking-tight flex-1"
-            style={{ color: isCompleted ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.92)' }}
+            style={{ color: isCompleted ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.92)' }}
           >
             {task.task_text}
           </h3>
 
           <div className="flex items-center gap-0.5 shrink-0 mt-0.5">
             <motion.button
-              whileHover={{ scale: 1.15, color: '#93C5FD' }}
+              whileHover={{ scale: 1.15, color: '#3B82F6' }}
               whileTap={{ scale: 0.9 }}
               onClick={() => onEdit(task)}
               title="Edit"
@@ -162,8 +165,16 @@ function CoachTaskCard({
           >
             {task.task_subtasks.map((sub, idx) => (
               <li key={idx} className="flex items-start gap-2">
-                <span className="text-xs mt-0.5 shrink-0" style={{ color: '#3B82F6' }}>›</span>
-                <span className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                <span
+                  className="text-xs mt-0.5 shrink-0"
+                  style={{ color: isCompleted ? 'rgba(59,130,246,0.4)' : '#3B82F6' }}
+                >
+                  ›
+                </span>
+                <span
+                  className="text-xs leading-relaxed"
+                  style={{ color: isCompleted ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.55)' }}
+                >
                   {sub}
                 </span>
               </li>
@@ -219,29 +230,29 @@ function InlineEditForm({
         boxShadow: '0 0 24px rgba(59,130,246,0.08), 0 8px 32px rgba(0,0,0,0.5)',
       }}
     >
-      <p className="text-[10px] font-semibold tracking-[0.15em] uppercase text-blue-400/50">
+      <p className="text-[10px] font-semibold tracking-[0.15em] uppercase text-white/55">
         Editing
       </p>
       <input
         type="text"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className="w-full px-3 py-2.5 rounded-xl text-sm font-bold text-white placeholder:text-white/20 outline-none focus:ring-1 focus:ring-blue-500/30"
-        style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
-        placeholder="Task title..."
+        className="w-full px-3 py-2.5 rounded-xl text-sm font-bold text-white placeholder:text-white/45 outline-none focus:ring-1 focus:ring-blue-500/30"
+        style={{ background: 'rgba(15,23,42,0.92)', border: '1px solid rgba(148,163,184,0.32)' }}
+        placeholder="What's the task?"
         autoFocus
       />
       <div className="space-y-2">
         {subs.map((sub, idx) => (
           <div key={idx} className="flex items-center gap-2.5">
-            <span className="text-[10px] text-white/25 w-14 shrink-0">Step {idx + 1}</span>
+            <span className="text-[10px] text-white/55 w-14 shrink-0">Subtask {idx + 1}</span>
             <input
               type="text"
               value={sub}
               onChange={(e) => { const n = [...subs]; n[idx] = e.target.value; setSubs(n); }}
-              placeholder={`Step ${idx + 1}...`}
-              className="flex-1 px-3 py-2 rounded-lg text-xs text-white placeholder:text-white/20 outline-none focus:ring-1 focus:ring-blue-500/20"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+              placeholder={`Subtask ${idx + 1}...`}
+              className="flex-1 px-3 py-2 rounded-lg text-xs text-white placeholder:text-white/45 outline-none focus:ring-1 focus:ring-blue-500/20"
+              style={{ background: 'rgba(15,23,42,0.92)', border: '1px solid rgba(148,163,184,0.32)' }}
             />
           </div>
         ))}
@@ -256,7 +267,7 @@ function InlineEditForm({
           style={{
             background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(99,102,241,0.2))',
             border: '1px solid rgba(59,130,246,0.3)',
-            color: '#93C5FD',
+            color: 'rgba(255,255,255,0.92)',
           }}
         >
           {isSaving ? 'Saving...' : 'Save'}
@@ -266,12 +277,111 @@ function InlineEditForm({
           whileTap={{ scale: 0.97 }}
           onClick={onCancel}
           className="flex-1 py-2.5 rounded-xl text-xs font-semibold"
-          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)' }}
+          style={{ background: 'rgba(15,23,42,0.92)', border: '1px solid rgba(148,163,184,0.32)', color: 'rgba(255,255,255,0.78)' }}
         >
           Cancel
         </motion.button>
       </div>
     </motion.div>
+  );
+}
+
+// ── Coach Hint (collapsible guidance, unique origami-scroll animation) ────────
+function CoachHint() {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div className="relative">
+      {/* Toggle button */}
+      <motion.button
+        onClick={() => setOpen((v) => !v)}
+        whileHover={{ scale: 1.12 }}
+        whileTap={{ scale: 0.9 }}
+        title={open ? 'Collapse guidance' : 'Show guidance'}
+        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold tracking-widest uppercase transition-colors select-none"
+        style={{
+          background: open ? 'rgba(59,130,246,0.12)' : 'rgba(255,255,255,0.04)',
+          border: open ? '1px solid rgba(59,130,246,0.28)' : '1px solid rgba(255,255,255,0.08)',
+          color: open ? '#93C5FD' : 'rgba(255,255,255,0.3)',
+        }}
+      >
+        {/* Animated scroll/unfurl icon */}
+        <motion.svg
+          width="11" height="11" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          animate={{ rotate: open ? 0 : 180, scaleY: open ? 1 : -1 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+        >
+          <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2" />
+          <path d="M12 8v8M8 12h8" />
+        </motion.svg>
+        {open ? 'hide' : 'tip'}
+      </motion.button>
+
+      {/* Origami-scroll reveal */}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="hint"
+            initial={{ scaleY: 0, opacity: 0, originY: 0, rotateX: -35 }}
+            animate={{
+              scaleY: 1,
+              opacity: 1,
+              rotateX: 0,
+              transition: {
+                scaleY: { type: 'spring', stiffness: 260, damping: 24 },
+                opacity: { duration: 0.25 },
+                rotateX: { type: 'spring', stiffness: 200, damping: 20, delay: 0.05 },
+              },
+            }}
+            exit={{
+              scaleY: 0,
+              opacity: 0,
+              rotateX: -25,
+              transition: {
+                scaleY: { duration: 0.28, ease: [0.4, 0, 0.6, 1] },
+                opacity: { duration: 0.18 },
+                rotateX: { duration: 0.22 },
+              },
+            }}
+            style={{
+              originY: 0,
+              transformPerspective: 600,
+              position: 'absolute',
+              right: 0,
+              top: 'calc(100% + 6px)',
+              zIndex: 20,
+              width: '220px',
+            }}
+          >
+            <div
+              className="rounded-xl p-3 text-[11px] leading-relaxed space-y-2 shadow-2xl"
+              style={{
+                background: 'linear-gradient(145deg, rgba(15,23,42,0.98) 0%, rgba(17,30,58,0.97) 100%)',
+                border: '1px solid rgba(59,130,246,0.22)',
+                boxShadow: '0 0 28px rgba(59,130,246,0.1), 0 12px 32px rgba(0,0,0,0.6)',
+                color: 'rgba(255,255,255,0.72)',
+              }}
+            >
+              {/* Glowing top edge */}
+              <div
+                className="absolute inset-x-0 top-0 h-[2px] rounded-t-xl"
+                style={{ background: 'linear-gradient(90deg, transparent, rgba(59,130,246,0.5), transparent)' }}
+              />
+              <p style={{ color: '#93C5FD', fontWeight: 700, fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                Quick reminder
+              </p>
+              <p>
+                Subtasks are <span style={{ color: 'rgba(255,255,255,0.92)', fontWeight: 600 }}>optional</span> — add them only if breaking the task into smaller steps helps your client move forward.
+              </p>
+              <p>
+                Aim for a task that feels <span style={{ color: '#6EE7B7', fontWeight: 600 }}>achievable before your next session</span>. Clear, specific, and doable beats ambitious and vague.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -437,12 +547,12 @@ export default function TasksPanel({ session, currentUserId, isCoach }: TasksPan
     <div
       ref={scrollRef}
       className="flex flex-col h-full overflow-y-auto"
-      style={{ background: '#0B1220', padding: '20px 16px' }}
+      style={{ background: '#111827', padding: '20px 16px' }}
     >
       {/* Header */}
       <div className="mb-5">
-        <h2 className="text-[12px] font-semibold tracking-[0.18em] uppercase text-white/30 mb-3">
-          Tasks
+        <h2 className="text-[12px] font-semibold tracking-[0.18em] uppercase text-white/60 mb-3">
+          Your Tasks
         </h2>
         <div
           className="h-px w-full"
@@ -450,93 +560,37 @@ export default function TasksPanel({ session, currentUserId, isCoach }: TasksPan
         />
       </div>
 
-      {/* Task list */}
-      {loadingTasks ? (
-        <motion.div
-          animate={{ opacity: [0.3, 0.8, 0.3] }}
-          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-          className="text-sm text-white/25 text-center py-10"
-        >
-          Loading...
-        </motion.div>
-      ) : (
-        <motion.div layout className="space-y-3 flex-1">
-          <AnimatePresence initial={false}>
-            {existingTasks.map((task, idx) =>
-              editingTask?.id === task.id ? (
-                <InlineEditForm
-                  key={`edit-${task.id}`}
-                  task={editingTask}
-                  onSave={handleSaveEdit}
-                  onCancel={() => setEditingTask(null)}
-                  isSaving={isSavingEdit}
-                />
-              ) : (
-                <CoachTaskCard
-                  key={task.id}
-                  task={task}
-                  index={idx}
-                  isJustAdded={justAddedId === task.id}
-                  onEdit={setEditingTask}
-                  onDelete={handleDelete}
-                  isDeleting={deletingId === task.id}
-                />
-              )
-            )}
-          </AnimatePresence>
-
-          {existingTasks.length === 0 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
-              className="flex flex-col items-center justify-center gap-3 py-10"
-            >
-              <motion.div
-                animate={{ scale: [1, 1.05, 1], opacity: [0.3, 0.6, 0.3] }}
-                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-                className="w-12 h-12 rounded-full flex items-center justify-center"
-                style={{ background: 'rgba(59,130,246,0.07)', border: '1px solid rgba(59,130,246,0.15)' }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(59,130,246,0.6)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-              </motion.div>
-              <p className="text-xs text-white/20 text-center">No tasks yet</p>
-            </motion.div>
-          )}
-        </motion.div>
-      )}
-
-      {/* Add Task form — coaches only */}
+      {/* Add Task form — coaches only (top) */}
       {isCoach && (
         <motion.div
           layout
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.4 }}
-          className="mt-6 pt-5 space-y-3"
-          style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+          className="mb-6 pb-5 space-y-3"
+          style={{ borderBottom: '1px solid rgba(148,163,184,0.22)' }}
         >
-          <p className="text-[10px] font-semibold tracking-[0.15em] uppercase text-white/25">
-            Add Task
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-semibold tracking-[0.15em] uppercase text-white/55">
+              Add Task
+            </p>
+            <CoachHint />
+          </div>
 
           <input
             type="text"
             value={taskTitle}
             onChange={(e) => setTaskTitle(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleCreate(); }}
-            placeholder="Task title..."
-            className="w-full px-4 py-3 rounded-xl text-sm font-bold text-white placeholder:text-white/20 outline-none focus:ring-1 focus:ring-blue-500/30 transition-all"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
+            placeholder="What's the task?"
+            className="w-full px-4 py-3 rounded-xl text-sm font-bold text-white placeholder:text-white/45 outline-none focus:ring-1 focus:ring-blue-500/30 transition-all"
+            style={{ background: 'rgba(15,23,42,0.92)', border: '1px solid rgba(148,163,184,0.32)' }}
           />
 
           <div className="space-y-2">
             {subtasks.map((sub, idx) => (
               <div key={idx} className="flex items-center gap-2.5">
-                <span className="text-[10px] text-white/22 w-14 shrink-0">Step {idx + 1}</span>
+                <span className="text-[10px] text-white/55 w-14 shrink-0">Subtask {idx + 1}</span>
                 <input
                   type="text"
                   value={sub}
@@ -545,9 +599,9 @@ export default function TasksPanel({ session, currentUserId, isCoach }: TasksPan
                     next[idx] = e.target.value;
                     setSubtasks(next);
                   }}
-                  placeholder={`Step ${idx + 1}...`}
-                  className="flex-1 px-3 py-2 rounded-lg text-xs text-white placeholder:text-white/18 outline-none focus:ring-1 focus:ring-blue-500/20 transition-all"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
+                  placeholder={`Subtask ${idx + 1}...`}
+                  className="flex-1 px-3 py-2 rounded-lg text-xs text-white placeholder:text-white/45 outline-none focus:ring-1 focus:ring-blue-500/20 transition-all"
+                  style={{ background: 'rgba(15,23,42,0.92)', border: '1px solid rgba(148,163,184,0.32)' }}
                 />
               </div>
             ))}
@@ -558,14 +612,14 @@ export default function TasksPanel({ session, currentUserId, isCoach }: TasksPan
             disabled={!taskTitle.trim() || isCreating}
             whileHover={taskTitle.trim() ? {
               scale: 1.02,
-              boxShadow: '0 0 22px rgba(59,130,246,0.28)',
+              boxShadow: '0 0 22px rgba(59,130,246,0.25)',
             } : {}}
             whileTap={{ scale: 0.97 }}
             className="w-full py-3 rounded-xl text-sm font-bold tracking-wide transition-all disabled:opacity-25"
             style={{
               background: 'linear-gradient(135deg, rgba(59,130,246,0.18) 0%, rgba(99,102,241,0.18) 100%)',
-              border: '1px solid rgba(59,130,246,0.28)',
-              color: '#93C5FD',
+              border: '1px solid rgba(59,130,246,0.3)',
+              color: 'rgba(255,255,255,0.92)',
             }}
           >
             {isCreating ? (
@@ -579,6 +633,72 @@ export default function TasksPanel({ session, currentUserId, isCoach }: TasksPan
           </motion.button>
         </motion.div>
       )}
+
+      {/* Previous tasks list (below Add Task) */}
+      <div>
+        <p className="text-[10px] font-semibold tracking-[0.15em] uppercase text-white/55 mb-3">
+          Previous tasks
+        </p>
+        {loadingTasks ? (
+          <motion.div
+            animate={{ opacity: [0.3, 0.8, 0.3] }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            className="text-sm text-white/60 text-center py-10"
+          >
+            Loading...
+          </motion.div>
+        ) : (
+          <motion.div layout className="space-y-3 flex-1">
+            <AnimatePresence initial={false}>
+              {existingTasks.map((task, idx) =>
+                editingTask?.id === task.id ? (
+                  <InlineEditForm
+                    key={`edit-${task.id}`}
+                    task={editingTask}
+                    onSave={handleSaveEdit}
+                    onCancel={() => setEditingTask(null)}
+                    isSaving={isSavingEdit}
+                  />
+                ) : (
+                  <CoachTaskCard
+                    key={task.id}
+                    task={task}
+                    index={idx}
+                    isJustAdded={justAddedId === task.id}
+                    onEdit={setEditingTask}
+                    onDelete={handleDelete}
+                    isDeleting={deletingId === task.id}
+                  />
+                )
+              )}
+            </AnimatePresence>
+
+            {existingTasks.length === 0 && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
+                className="flex flex-col items-center justify-center gap-4 pt-16 pb-8"
+              >
+                <motion.div
+                  animate={{ scale: [1, 1.05, 1], opacity: [0.4, 0.7, 0.4] }}
+                  transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                  className="w-14 h-14 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(59,130,246,0.07)', border: '1px solid rgba(59,130,246,0.15)' }}
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(59,130,246,0.6)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                </motion.div>
+                <p className="text-[13px] text-white/55 text-center leading-relaxed max-w-[160px]">
+                  No tasks yet
+                </p>
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+      </div>
     </div>
   );
 }
