@@ -26,18 +26,18 @@ export default function VideoArea({ otherPersonName }: VideoAreaProps) {
         <VideoTrack trackRef={remoteTrack} className="w-full h-full object-cover" />
       ) : (
         <div className="flex flex-col items-center justify-center text-center p-8">
-          <div className="w-24 h-24 rounded-full bg-slate-800/50 flex items-center justify-center mb-4">
-            <svg className="w-12 h-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-24 h-24 landscape:w-16 landscape:h-16 rounded-full bg-slate-800/50 flex items-center justify-center mb-4 landscape:mb-2">
+            <svg className="w-12 h-12 landscape:w-8 landscape:h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
           </div>
-          <p className="text-white/60 text-lg font-medium">Waiting for {otherPersonName}...</p>
+          <p className="text-white/60 text-lg landscape:text-sm font-medium">Waiting for {otherPersonName}...</p>
         </div>
       )}
 
       {/* Local Video Preview (PIP – bottom right) */}
       {localTrack && (
-        <div className="absolute bottom-4 right-4 w-48 h-36 rounded-lg overflow-hidden border-2 border-white/20 bg-slate-900 shadow-2xl">
+        <div className="absolute bottom-2 right-2 w-28 h-20 landscape:w-24 landscape:h-14 md:bottom-4 md:right-4 md:w-48 md:h-36 rounded-lg overflow-hidden border-2 border-white/20 bg-slate-900 shadow-2xl">
           <VideoTrack
             trackRef={localTrack}
             className={`w-full h-full object-cover ${!isCameraEnabled ? 'opacity-50' : ''}`}

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant landscape (@media (orientation: landscape));
 
 :root {
   /* Deep charcoal with ember undertones */

@@ -50,9 +50,9 @@ export default function Sidebar({
   isCoach,
 }: SidebarProps) {
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Tab Navigation */}
-      <div className="flex border-b border-slate-700/80">
+      <div className="flex shrink-0 border-b border-slate-700/80">
         <button
           onClick={() => onTabChange('chat')}
           className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${

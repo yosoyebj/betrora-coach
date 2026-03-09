@@ -167,25 +167,25 @@ function InnerRoom({
       )}
 
       {/* Top Bar */}
-      <div className="h-16 bg-slate-900/80 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-6 z-10">
-        <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold text-white">
+      <div className="h-12 landscape:h-10 md:h-16 bg-slate-900/80 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-3 landscape:px-4 md:px-6 z-10">
+        <div className="flex items-center gap-4 min-w-0">
+          <h1 className="text-sm md:text-lg font-semibold text-white truncate max-w-[140px] md:max-w-none">
             {sessionTitle} <span className="text-white/60 font-normal">Room</span>
           </h1>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${getStatusColor(connectionState)}`}>
+        <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
+          <div className={`inline-flex items-center gap-2 rounded-full border px-2 md:px-3 py-1 text-xs font-semibold ${getStatusColor(connectionState)}`}>
             {connectionState === 'connecting' && (
               <div className="w-2 h-2 rounded-full bg-yellow-300 animate-pulse" />
             )}
-            <span>{getStatusLabel(connectionState)}</span>
+            <span className="hidden sm:inline">{getStatusLabel(connectionState)}</span>
           </div>
 
           {(connectionState === 'failed' || connectionState === 'disconnected') && (
             <button
               onClick={onRetry}
-              className="px-4 py-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-500/30 transition-colors text-sm font-medium"
+              className="px-3 md:px-4 py-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-500/30 transition-colors text-xs md:text-sm font-medium"
             >
               Retry
             </button>
@@ -194,14 +194,14 @@ function InnerRoom({
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Video Area (Left) */}
-        <div className="room-video-area flex-1 relative bg-slate-950">
+      <div className="flex-1 flex flex-col landscape:flex-row md:flex-row overflow-hidden">
+        {/* Video Area */}
+        <div className="room-video-area flex-[2] min-h-0 landscape:flex-1 landscape:min-w-0 md:flex-1 relative bg-slate-950">
           <VideoArea otherPersonName={otherPersonName} />
         </div>
 
-        {/* Sidebar (Right) */}
-        <div className="w-80 bg-slate-900 border-l border-slate-700/80 flex flex-col h-full overflow-hidden">
+        {/* Sidebar */}
+        <div className="flex-[3] min-h-0 landscape:flex-none landscape:w-64 landscape:border-t-0 landscape:border-l md:flex-none md:w-80 bg-slate-900 border-t md:border-t-0 md:border-l border-slate-700/80 flex flex-col overflow-hidden">
           <Sidebar
             activeTab={activeTab}
             onTabChange={setActiveTab}
@@ -215,17 +215,17 @@ function InnerRoom({
       </div>
 
       {/* Footer Controls */}
-      <div className="h-20 bg-slate-900/80 backdrop-blur-md border-t border-white/10 flex items-center justify-center gap-4 z-10">
+      <div className="h-16 landscape:h-12 md:h-20 bg-slate-900/80 backdrop-blur-md border-t border-white/10 flex items-center justify-center gap-4 landscape:gap-3 z-10">
         <button
           onClick={toggleMic}
-          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+          className={`w-12 h-12 landscape:w-9 landscape:h-9 rounded-full flex items-center justify-center transition-all ${
             isMicrophoneEnabled
               ? 'bg-slate-700/50 text-white hover:bg-slate-700/70'
               : 'bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30'
           }`}
           title={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-6 h-6 landscape:w-4 landscape:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             {isMicrophoneEnabled ? (
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
             ) : (
@@ -236,14 +236,14 @@ function InnerRoom({
 
         <button
           onClick={toggleCamera}
-          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+          className={`w-12 h-12 landscape:w-9 landscape:h-9 rounded-full flex items-center justify-center transition-all ${
             isCameraEnabled
               ? 'bg-slate-700/50 text-white hover:bg-slate-700/70'
               : 'bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30'
           }`}
           title={isCameraEnabled ? 'Turn off camera' : 'Turn on camera'}
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-6 h-6 landscape:w-4 landscape:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             {isCameraEnabled ? (
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             ) : (
@@ -254,10 +254,10 @@ function InnerRoom({
 
         <button
           onClick={onLeave}
-          className="w-14 h-14 rounded-full bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30 transition-all flex items-center justify-center"
+          className="w-14 h-14 landscape:w-10 landscape:h-10 rounded-full bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30 transition-all flex items-center justify-center"
           title="End call / Leave"
         >
-          <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-7 h-7 landscape:w-5 landscape:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M7 11a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v2a4 4 0 01-4 4zm0 0v6a2 2 0 002 2h4a2 2 0 002-2v-6m-6 0h12" />
           </svg>
         </button>
