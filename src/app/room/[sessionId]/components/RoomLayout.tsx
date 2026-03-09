@@ -9,7 +9,7 @@ import {
   RoomAudioRenderer,
   useDataChannel,
 } from '@livekit/components-react';
-import { ConnectionState as LKConnectionState } from 'livekit-client';
+import { ConnectionState as LKConnectionState, LocalTrackPublication } from 'livekit-client';
 import { useRouter } from 'next/navigation';
 import VideoArea from './VideoArea';
 import Sidebar from './Sidebar';
@@ -87,9 +87,11 @@ function InnerRoom({
   const lkState = useConnectionState();
   const connectionState = mapLKState(lkState);
   const { isMicrophoneEnabled, isCameraEnabled, localParticipant, cameraTrack } = useLocalParticipant();
+  const cameraDeviceTrack =
+    cameraTrack instanceof LocalTrackPublication ? cameraTrack.videoTrack : undefined;
   const { devices: videoDevices, activeDeviceId, setActiveMediaDevice } = useMediaDeviceSelect({
     kind: 'videoinput',
-    track: cameraTrack ?? undefined,
+    track: cameraDeviceTrack,
   });
 
   const [messages, setMessages] = useState<Message[]>([]);
