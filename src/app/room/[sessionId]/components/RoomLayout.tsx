@@ -5,6 +5,7 @@ import {
   LiveKitRoom,
   useConnectionState,
   useLocalParticipant,
+  useMediaDeviceSelect,
   RoomAudioRenderer,
   useDataChannel,
 } from '@livekit/components-react';
@@ -85,9 +86,28 @@ function InnerRoom({
 }: InnerRoomProps) {
   const lkState = useConnectionState();
   const connectionState = mapLKState(lkState);
-  const { isMicrophoneEnabled, isCameraEnabled, localParticipant } = useLocalParticipant();
+  const { isMicrophoneEnabled, isCameraEnabled, localParticipant, cameraTrack } = useLocalParticipant();
+  const { devices: videoDevices, activeDeviceId, setActiveMediaDevice } = useMediaDeviceSelect({
+    kind: 'videoinput',
+    track: cameraTrack ?? undefined,
+  });
 
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
+
+  const switchToNextCamera = useCallback(async () => {
+    if (videoDevices.length < 2 || !isCameraEnabled || isSwitchingCamera) return;
+    const currentIndex = videoDevices.findIndex((d) => d.deviceId === activeDeviceId);
+    const nextIndex = (currentIndex + 1) % videoDevices.length;
+    const nextDevice = videoDevices[nextIndex];
+    if (!nextDevice) return;
+    setIsSwitchingCamera(true);
+    try {
+      await setActiveMediaDevice(nextDevice.deviceId);
+    } finally {
+      setTimeout(() => setIsSwitchingCamera(false), 400);
+    }
+  }, [videoDevices, activeDeviceId, setActiveMediaDevice, isCameraEnabled, isSwitchingCamera]);
 
   const handleChatMessage = useCallback((msg: { payload: Uint8Array; from?: { identity?: string } }) => {
     const text = new TextDecoder().decode(msg.payload);
@@ -251,6 +271,27 @@ function InnerRoom({
             )}
           </svg>
         </button>
+
+        {isCameraEnabled && videoDevices.length >= 2 && (
+          <button
+            onClick={switchToNextCamera}
+            disabled={isSwitchingCamera}
+            className="w-10 h-10 landscape:w-8 landscape:h-8 rounded-xl flex items-center justify-center transition-all duration-200 ease-out active:scale-90 hover:scale-105 bg-white/10 backdrop-blur-md border border-white/20 text-white/90 hover:bg-white/15 hover:border-white/30 hover:shadow-[0_0_16px_rgba(148,163,184,0.12)] disabled:opacity-50 disabled:pointer-events-none"
+            title="Switch camera"
+          >
+            <svg
+              className={`w-5 h-5 landscape:w-4 landscape:h-4 transition-transform duration-300 ${isSwitchingCamera ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              viewBox="0 0 24 24"
+            >
+              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        )}
 
         <button
           onClick={onLeave}
