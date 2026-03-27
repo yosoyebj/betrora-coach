@@ -80,13 +80,12 @@ export default function LoginPage() {
           url.searchParams.delete("type");
           window.history.replaceState({}, "", url.toString());
         } else {
-          // Use getSessionFromUrl - more robust than manually parsing hash
-          // This handles both hash fragments and code exchange automatically
-          const result = await supabase.auth.getSessionFromUrl({
-            storeSession: true,
-          });
-          data = result.data;
-          sessionError = result.error;
+          // No token parameters present – nothing to process here for Supabase v2.
+          // getSessionFromUrl was removed in @supabase/supabase-js v2, and magic links
+          // are already handled by verifyOtp(token_hash) above, so we can safely
+          // skip additional URL parsing.
+          setProcessingMagicLink(false);
+          return;
         }
 
       // #region agent log
